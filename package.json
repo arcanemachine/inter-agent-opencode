@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@arcanemachine/inter-agent-opencode",
+  "version": "0.1.0",
+  "description": "OpenCode extension for connecting agent sessions to the inter-agent message bus.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "opencode": ">=1.18.15 <1.19.0"
+  },
+  "exports": {
+    "./tui": "./dist/tui.js",
+    "./server": "./dist/server.js"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE.md",
+    "README.md",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 dist-tests/tests/*.test.js",
+    "format": "prettier --write src tests README.md CHANGELOG.md package.json tsconfig.json tsconfig.test.json",
+    "format:check": "prettier --check src tests README.md CHANGELOG.md package.json tsconfig.json tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.15",
+    "@types/node": "24.0.15",
+    "prettier": "3.6.2",
+    "typescript": "5.9.2"
+  }
+}
