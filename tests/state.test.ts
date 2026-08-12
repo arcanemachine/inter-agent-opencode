@@ -153,10 +153,16 @@ async function runCleanupRace<T>(
     return result;
   } finally {
     worker.postMessage({ stop: true });
-    await Promise.race([
-      worker.terminate(),
-      new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
-    ]);
+    try {
+      await timeoutAfter(
+        worker.terminate(),
+        WORKER_TERMINATION_TIMEOUT_MS,
+        "cleanup racer termination timed out",
+      );
+    } catch (error) {
+      worker.unref();
+      throw error;
+    }
   }
 }
 
