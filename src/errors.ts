@@ -52,6 +52,12 @@ export class UnsupportedEndpointError extends InterAgentError {
   }
 }
 
+export class StateError extends InterAgentError {
+  constructor(message: string) {
+    super(message, "StateError");
+  }
+}
+
 export class ProtocolError extends InterAgentError {
   readonly code: ProtocolErrorCode;
 
