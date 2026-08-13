@@ -94,15 +94,17 @@ test("count bound evicts the oldest records", () => {
 });
 
 test("encoded size bound evicts the oldest records", () => {
-  const big = "x".repeat(100_000);
+  const inputCount = 40;
+  const big = "x".repeat(250_000);
   let inbox = emptyInbox();
-  for (let index = 0; index < 200; index += 1) {
+  for (let index = 0; index < inputCount; index += 1) {
     inbox = addMessage(inbox, message(`m${index}`, big)).inbox;
   }
-  assert.equal(inbox.messages.length <= INBOX_MAX_MESSAGES, true);
+  assert(inputCount < INBOX_MAX_MESSAGES);
+  assert(inbox.messages.length < inputCount);
   assert(encodedInboxSize(inbox) <= INBOX_MAX_BYTES);
-  assert.equal(inbox.messages[inbox.messages.length - 1].id, "m199");
-  assert.notEqual(inbox.messages[0].id, "m0");
+  assert.equal(inbox.messages[inbox.messages.length - 1].id, "m39");
+  assert.equal(inbox.messages[0].id === "m0", false);
 });
 
 test("a single over-large message is retained as the sole record", () => {
@@ -334,25 +336,37 @@ test("concurrent readers see complete files during atomic replacement", async (t
       worker.once("error", reject);
     });
     let inbox: Inbox = emptyInbox();
-    for (let index = 0; index < 100; index += 1) {
-      inbox = addMessage(inbox, message(`s${index}`, "y".repeat(64_000))).inbox;
+    for (let index = 0; index < 20; index += 1) {
+      inbox = addMessage(
+        inbox,
+        message(`s${index}`, "y".repeat(320_000)),
+      ).inbox;
       writeInboxFile(dataDir, lease.workspaceHash, lease.sessionHash, inbox);
     }
     Atomics.store(new Int32Array(stopFlag), 0, 1);
-    const result = await new Promise<{ errors: string[]; reads: number }>(
-      (resolve, reject) => {
-        worker.once("message", (value) =>
-          resolve(value as { errors: string[]; reads: number }),
-        );
-        worker.once("error", reject);
-        worker.once("exit", (code) => {
-          if (code !== 0)
-            reject(new Error(`reader worker exited with code ${code}`));
-        });
-      },
-    );
+    const result = await new Promise<{
+      errors: string[];
+      reads: number;
+      successfulParses: number;
+    }>((resolve, reject) => {
+      worker.once("message", (value) =>
+        resolve(
+          value as {
+            errors: string[];
+            reads: number;
+            successfulParses: number;
+          },
+        ),
+      );
+      worker.once("error", reject);
+      worker.once("exit", (code) => {
+        if (code !== 0)
+          reject(new Error(`reader worker exited with code ${code}`));
+      });
+    });
     assert.deepEqual(result.errors, []);
     assert(result.reads > 0);
+    assert(result.successfulParses > 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(workspace, { recursive: true, force: true });

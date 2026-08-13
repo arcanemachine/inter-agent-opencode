@@ -104,10 +104,11 @@ function timeoutAfter<T>(
 async function runCleanupRace<T>(
   lockPath: string,
   operation: () => T,
+  mode: "blocker" | "replace-owner" | "replace-after-inspection" = "blocker",
 ): Promise<T> {
   const worker = new Worker(
     new URL("./fixtures/lease-cleanup-racer.js", import.meta.url),
-    { workerData: { lockPath } },
+    { workerData: { lockPath, mode } },
   );
   let ready = false;
   let raced = false;
@@ -138,6 +139,8 @@ async function runCleanupRace<T>(
   });
   try {
     await timeoutAfter(readyPromise, 2_000, "cleanup racer did not start");
+    if (mode === "replace-after-inspection")
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
     const result = operation();
     await timeoutAfter(
       racedPromise,
@@ -440,7 +443,7 @@ test("lease outcomes survive simulated cleanup races", async () => {
         .present,
       true,
     );
-    assert.equal(existsSync(lockPath), true);
+    assert.equal(existsSync(lockPath), false);
     rmSync(lockPath, { recursive: true, force: true });
 
     const refreshed = await runCleanupRace(lockPath, () =>
@@ -458,7 +461,31 @@ test("lease outcomes survive simulated cleanup races", async () => {
         ?.heartbeatAt,
       new Date(2_000).toISOString(),
     );
-    assert.equal(existsSync(lockPath), true);
+    assert.equal(existsSync(lockPath), false);
+    rmSync(lockPath, { recursive: true, force: true });
+
+    const replacedAfterInspection = await runCleanupRace(
+      lockPath,
+      () =>
+        refreshLease(
+          dataDir,
+          claimed.workspaceHash,
+          claimed.sessionHash,
+          claimed.ownerToken,
+          2_250,
+        ),
+      "replace-after-inspection",
+    );
+    assert.equal(replacedAfterInspection.ownerToken, claimed.ownerToken);
+    assert.equal(
+      readLeaseFile(dataDir, claimed.workspaceHash, claimed.sessionHash).record
+        ?.heartbeatAt,
+      new Date(2_250).toISOString(),
+    );
+    assert.equal(
+      readFileSync(join(lockPath, "owner"), "utf8"),
+      "foreign-owner",
+    );
     rmSync(lockPath, { recursive: true, force: true });
 
     await assert.rejects(
@@ -472,6 +499,29 @@ test("lease outcomes survive simulated cleanup races", async () => {
         ),
       ),
       /owned by another/,
+    );
+    assert.equal(existsSync(lockPath), false);
+    rmSync(lockPath, { recursive: true, force: true });
+
+    await assert.rejects(
+      runCleanupRace(
+        lockPath,
+        () =>
+          refreshLease(
+            dataDir,
+            claimed.workspaceHash,
+            claimed.sessionHash,
+            claimed.ownerToken,
+            2_500,
+          ),
+        "replace-owner",
+      ),
+      /lock owner changed/,
+    );
+    assert.equal(
+      readLeaseFile(dataDir, claimed.workspaceHash, claimed.sessionHash).record
+        ?.heartbeatAt,
+      new Date(2_500).toISOString(),
     );
     assert.equal(existsSync(lockPath), true);
     rmSync(lockPath, { recursive: true, force: true });
@@ -490,7 +540,7 @@ test("lease outcomes survive simulated cleanup races", async () => {
         .present,
       false,
     );
-    assert.equal(existsSync(lockPath), true);
+    assert.equal(existsSync(lockPath), false);
     rmSync(lockPath, { recursive: true, force: true });
   } finally {
     rmSync(root, { recursive: true, force: true });

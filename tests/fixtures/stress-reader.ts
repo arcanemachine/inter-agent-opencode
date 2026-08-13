@@ -8,6 +8,7 @@ const { path, stopFlag } = workerData as {
 const flag = new Int32Array(stopFlag);
 const errors: string[] = [];
 let reads = 0;
+let successfulParses = 0;
 
 if (!parentPort) throw new Error("reader worker requires a parent port");
 parentPort.postMessage({ ready: true });
@@ -23,6 +24,8 @@ while (Atomics.load(flag, 0) === 0) {
       errors.push("parsed state file was not an object");
     } else if (!Array.isArray((parsed as { messages?: unknown }).messages)) {
       errors.push("parsed state file had no messages array");
+    } else {
+      successfulParses += 1;
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -30,4 +33,4 @@ while (Atomics.load(flag, 0) === 0) {
   }
   reads += 1;
 }
-parentPort.postMessage({ errors, reads });
+parentPort.postMessage({ errors, reads, successfulParses });

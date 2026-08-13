@@ -32,6 +32,7 @@ const LEASE_COORDINATOR_RECLAIM_DIRNAME = ".reclaim";
 const LEASE_COORDINATOR_RECLAIM_QUARANTINE_PREFIX = ".reclaim.quarantine.";
 const LEASE_COORDINATOR_QUARANTINE_PREFIX =
   ".connection.lock.coordinator.quarantine.";
+const LEASE_LOCK_QUARANTINE_PREFIX = ".connection.lock.quarantine.";
 const LEASE_LOCK_MARKER = "owner";
 const LEASE_LOCK_TIMEOUT_MS = 10_000;
 const LEASE_LOCK_STALE_MS = 60_000;
@@ -427,6 +428,66 @@ function readLockMarker(path: string): string | undefined {
     if (isTransientLockRace(error)) return undefined;
     throw new StateError("unable to inspect connection lease lock");
   }
+}
+
+function restoreLeaseLockGeneration(
+  quarantine: string,
+  lockPath: string,
+): void {
+  try {
+    renameSync(quarantine, lockPath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST" || code === "ENOENT") return;
+    throw new StateError("unable to preserve connection lease lock");
+  }
+}
+
+function removeOwnedLeaseLock(
+  dir: string,
+  lockPath: string,
+  token: string,
+): void {
+  const coordinatorRelease = acquireCoordinator(dir);
+  let failure: unknown;
+  try {
+    const marker = readLockMarker(lockPath);
+    if (marker === undefined) {
+      if (!existsSync(lockPath)) return;
+      throw new StateError("connection lease lock owner changed");
+    }
+    if (marker !== token)
+      throw new StateError("connection lease lock owner changed");
+
+    const quarantine = join(
+      dir,
+      `${LEASE_LOCK_QUARANTINE_PREFIX}${generateOwnerToken()}`,
+    );
+    let renamed = false;
+    try {
+      renameSync(lockPath, quarantine);
+      renamed = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+        throw new StateError("unable to release connection lease lock");
+    }
+    if (renamed) {
+      const quarantinedMarker = readLockMarker(quarantine);
+      if (quarantinedMarker !== token) {
+        restoreLeaseLockGeneration(quarantine, lockPath);
+        throw new StateError("connection lease lock owner changed");
+      }
+      removeLockDirectory(quarantine);
+    }
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    coordinatorRelease();
+  } catch (error) {
+    if (failure === undefined) failure = error;
+  }
+  if (failure !== undefined) throw failure;
 }
 
 function removeRecoveryDirectory(path: string, reclaimToken?: string): void {
@@ -993,15 +1054,7 @@ function acquireLeaseLock(dir: string): () => void {
         return () => {
           if (released) return;
           released = true;
-          let marker: string;
-          try {
-            marker = readFileSync(markerPath, "utf8");
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-            throw new StateError("unable to inspect connection lease lock");
-          }
-          if (marker !== token) return;
-          removeLockDirectory(lockPath);
+          removeOwnedLeaseLock(dir, lockPath, token);
         };
       } catch (error) {
         if (created) {
