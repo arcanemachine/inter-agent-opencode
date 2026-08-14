@@ -23,6 +23,7 @@ import {
   parseError,
   parseFrame,
   parseListOk,
+  parseMessage,
   parseWelcome,
   validateName,
   validateText,
@@ -71,6 +72,11 @@ export type ControlClientOptions = ClientOptions & { fromName?: string };
 export type SendResult = {
   welcome: Welcome;
   error?: RemoteError;
+};
+
+export type AgentConnectionOptions = ClientOptions & {
+  name: string;
+  label?: string | null;
 };
 
 export function defaultWebSocketFactory(url: string): WebSocketLike {
@@ -262,6 +268,86 @@ function parseOperationError(
   const frame = parseFrame(raw);
   if (frame.op !== "error") return undefined;
   return safeRemoteError(frame, secret);
+}
+
+export class AgentConnection {
+  private constructor(
+    private readonly session: SocketSession,
+    readonly welcome: Welcome,
+    private readonly secret: string,
+    private readonly signal?: AbortSignal,
+  ) {}
+
+  static async open(options: AgentConnectionOptions): Promise<AgentConnection> {
+    const endpoint = options.endpoint ?? (await resolveEndpoint());
+    assertSupportedEndpoint(endpoint);
+    const secret = options.secret ?? resolveSecret().secret;
+    const factory = options.websocketFactory ?? defaultWebSocketFactory;
+    const connectTimeoutMs = options.connectTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
+    const deadline = performance.now() + connectTimeoutMs;
+    const socket = createSocket(factory, endpoint);
+    const session = new SocketSession(socket);
+    try {
+      await session.waitOpen(remainingDeadline(deadline), options.signal);
+      const hello = buildHello({
+        role: "agent",
+        sessionId: randomUUID(),
+        name: options.name,
+        label: options.label ?? null,
+        capabilities: {},
+      });
+      const clientNonce = hello.auth.client_nonce;
+      session.send(JSON.stringify(hello));
+      const challengeFrame = parseFrame(
+        await session.receive(remainingDeadline(deadline), options.signal),
+      );
+      if (challengeFrame.op === "error")
+        throw safeRemoteError(challengeFrame, secret);
+      const challenge = parseAuthChallenge(challengeFrame);
+      if (
+        !verifyServerProof(challenge.server_proof, secret, {
+          clientNonce,
+          serverNonce: challenge.server_nonce,
+          hello,
+        })
+      )
+        throw new AuthenticationError();
+      session.send(
+        JSON.stringify(
+          buildAuthResponse(secret, {
+            clientNonce,
+            serverNonce: challenge.server_nonce,
+            hello,
+          }),
+        ),
+      );
+      const welcomeFrame = parseFrame(
+        await session.receive(remainingDeadline(deadline), options.signal),
+      );
+      if (welcomeFrame.op === "error")
+        throw safeRemoteError(welcomeFrame, secret);
+      const welcome = parseWelcome(welcomeFrame);
+      return new AgentConnection(session, welcome, secret, options.signal);
+    } catch (error) {
+      session.close();
+      if (error instanceof InterAgentError) throw error;
+      throw new ConnectionError("inter-agent authentication failed");
+    }
+  }
+
+  async receive(
+    timeoutMs = HANDSHAKE_TIMEOUT_MS * 12,
+  ): Promise<import("./protocol.js").Message> {
+    const frame = parseFrame(
+      await this.session.receive(timeoutMs, this.signal),
+    );
+    if (frame.op === "error") throw safeRemoteError(frame, this.secret);
+    return parseMessage(frame);
+  }
+
+  async close(): Promise<void> {
+    this.session.close();
+  }
 }
 
 export class ControlConnection {

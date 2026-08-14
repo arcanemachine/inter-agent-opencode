@@ -3,6 +3,7 @@ import { performance } from "node:perf_hooks";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  AgentConnection,
   ControlConnection,
   type WebSocketFactory,
   type WebSocketLike,
@@ -78,6 +79,62 @@ function endpoint(
     ...overrides,
   };
 }
+
+test("persistent agent handshake receives inbound messages", async () => {
+  const secret = randomBytes(16).toString("base64url");
+  let socket: FakeSocket | undefined;
+  const factory: WebSocketFactory = () => {
+    socket = new FakeSocket((current, payload) => {
+      if (payload.op === "hello") {
+        const hello = payload;
+        const nonce = (hello.auth as { client_nonce: string }).client_nonce;
+        current.emit({
+          op: "auth_challenge",
+          method: "hmac-sha256",
+          server_nonce: "server-nonce",
+          server_proof: serverProof(secret, {
+            clientNonce: nonce,
+            serverNonce: "server-nonce",
+            hello,
+          }),
+        });
+      } else if (payload.op === "auth_response") {
+        current.emit({
+          op: "welcome",
+          session_id: "agent-session",
+          assigned_name: "agent-a",
+          capabilities: {
+            core: { version: "0.1" },
+            channels: true,
+            rate_limit: false,
+          },
+        });
+      }
+    });
+    return socket;
+  };
+  const connection = await AgentConnection.open({
+    endpoint: endpoint(),
+    secret,
+    name: "agent-a",
+    label: "Agent A",
+    websocketFactory: factory,
+  });
+  socket?.emit({
+    op: "msg",
+    msg_id: "message-1",
+    from: "peer-session",
+    from_name: "peer-a",
+    ts: new Date().toISOString(),
+    to: "agent-a",
+    text: "hello from peer",
+  });
+  const message = await connection.receive(100);
+  assert.equal(message.msg_id, "message-1");
+  assert.equal(message.text, "hello from peer");
+  await connection.close();
+  assert.equal(socket?.closed, true);
+});
 
 test("control handshake verifies the server proof before sending client proof", async () => {
   const secret = randomBytes(16).toString("base64url");
