@@ -4,7 +4,7 @@ OpenCode extension for connecting agent sessions to the inter-agent message bus.
 
 ## Status
 
-Phase 4 TUI listeners and commands are implemented for OpenCode `1.18.15`; server tools and automatic model-turn delivery are not included yet. The package is not published.
+Phase 5 TUI listeners, commands, and exact-session server tools are implemented for OpenCode `1.18.15`; automatic model-turn delivery is not included. The package is not published.
 
 The extension uses direct TypeScript/Bun WebSocket connections with separate OpenCode TUI and server plugin targets. It does not require a Python runtime helper for routine operation.
 
@@ -27,6 +27,12 @@ The command palette and slash entries are named:
 - `/inter-agent-inbox`
 
 Connect, send, broadcast, and inbox open an OpenCode prompt dialog for their arguments (for example, `agent-a --label Agent-A --auto-connect`, `peer text`, or `20`). Disconnect, list, and status run immediately. Commands operate on the current OpenCode session. Disconnect preserves that session's inbox and disables opt-in auto-connect. Inbox retention is bounded at 100 messages and 8 MiB of encoded JSON content.
+
+## Server tools
+
+The server plugin registers exactly five tools: `inter_agent_send(to, text)`, `inter_agent_broadcast(text)`, `inter_agent_list()`, `inter_agent_status()`, and `inter_agent_read_messages(count?)`. Server tools resolve the exact OpenCode `ToolContext.sessionID` and canonical project scope. Send and broadcast require that session's fresh connected lease and use its active lease name as `from_name`; they never borrow another session's identity. Broadcast is only for explicit everyone-directed requests. Message reads are exact-session and bounded to 1–100 messages (default 20). Disconnected sessions receive a concise setup error for send and broadcast while status and reads remain scoped to that session.
+
+The extension still uses separate `./tui` and `./server` package targets, and the server is started separately; the extension does not own server lifecycle.
 
 ## Development
 

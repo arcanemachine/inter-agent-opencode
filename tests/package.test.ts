@@ -11,6 +11,7 @@ type PackageManifest = {
   engines: { opencode: string };
   exports: Record<string, string>;
   files: string[];
+  dependencies: Record<string, string>;
 };
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -28,6 +29,9 @@ test("package metadata exposes independent OpenCode targets", async () => {
   assert.equal(manifest.version, "0.1.0");
   assert.equal(manifest.type, "module");
   assert.equal(manifest.engines.opencode, ">=1.18.15 <1.19.0");
+  assert.deepEqual(manifest.dependencies, {
+    "@opencode-ai/plugin": "1.18.15",
+  });
   assert.deepEqual(manifest.exports, {
     "./tui": "./dist/tui.js",
     "./server": "./dist/server.js",
@@ -66,9 +70,20 @@ test("target initialization has no runtime side effects", async () => {
   const serverModule = (await import(
     pathToFileURL(resolve(distPath, "server.js")).href
   )) as {
-    default: { server: (...args: never[]) => Promise<Record<string, never>> };
+    default: {
+      server: (...args: never[]) => Promise<{
+        tool?: Record<string, unknown>;
+      }>;
+    };
   };
 
   assert.equal(await tuiModule.default.tui(), undefined);
-  assert.deepEqual(await serverModule.default.server(), {});
+  const hooks = await serverModule.default.server();
+  assert.deepEqual(Object.keys(hooks.tool ?? {}).sort(), [
+    "inter_agent_broadcast",
+    "inter_agent_list",
+    "inter_agent_read_messages",
+    "inter_agent_send",
+    "inter_agent_status",
+  ]);
 });
