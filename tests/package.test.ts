@@ -29,6 +29,11 @@ test("package metadata exposes independent OpenCode targets", async () => {
   assert.equal(manifest.version, "0.1.0");
   assert.equal(manifest.type, "module");
   assert.equal(manifest.engines.opencode, ">=1.18.15 <1.19.0");
+  assert.deepEqual(manifest.files.slice(0, 2), [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+  ]);
+  assert.equal(manifest.files.includes("dist"), false);
   assert.deepEqual(manifest.dependencies, {
     "@opencode-ai/plugin": "1.18.15",
   });

@@ -13,7 +13,8 @@
     "./server": "./dist/server.js"
   },
   "files": [
-    "dist",
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
     "CHANGELOG.md",
     "LICENSE.md",
     "README.md",
