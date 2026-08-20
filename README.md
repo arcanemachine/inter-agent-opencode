@@ -1,51 +1,143 @@
 # Inter-agent for OpenCode
 
-OpenCode extension for connecting agent sessions to the inter-agent message bus.
+OpenCode extension for connecting agent sessions to the inter-agent message bus. The package is not published; install it from a local package archive or a local checkout.
 
-## Status
+## Compatibility and transport
 
-Phase 6 TUI listeners, exact-session server tools, and automatic model-turn delivery are implemented for OpenCode `1.18.15`. The package is not published.
+- Validated host: OpenCode `1.18.15` (package range `>=1.18.15 <1.19.0`).
+- Separate package targets: `./tui` for the TUI and `./server` for server tools. Do not configure one target as the other.
+- Supported transport: authenticated, plaintext WebSocket on loopback only (`127.0.0.1`, `::1`, or a loopback-resolving `localhost`). Non-loopback hosts and TLS/WSS fail closed.
+- The inter-agent server is a separate process. This extension never starts, stops, or owns its lifecycle.
 
-The extension uses direct TypeScript/Bun WebSocket connections with separate OpenCode TUI and server plugin targets. It does not require a Python runtime helper for routine operation.
+Bun, Windows filesystem behavior, and hosts outside the stated OpenCode range are not part of the initial validation. The source checkout tracks confirmed follow-ups in `TODO.md`; packed archives intentionally omit that development-only file.
 
-## Transport and security
+## Installation
 
-The initial target is plaintext loopback only (`localhost`, loopback IPv4, or loopback IPv6). TLS and non-loopback endpoints fail closed. The inter-agent server must be started separately; this extension never starts or owns it.
-
-Each OpenCode session has an independent routing name, connection lease, listener, and private bounded inbox. Navigating to another session does not disconnect an existing listener. Peer messages are treated as untrusted collaboration input and are persisted before best-effort attention/toast notifications. Each connected session owns its pending delivery batch; pending state is never shared between sessions.
-
-## TUI commands
-
-The command palette and slash entries are named:
-
-- `/inter-agent-connect`
-- `/inter-agent-disconnect`
-- `/inter-agent-send`
-- `/inter-agent-broadcast`
-- `/inter-agent-list`
-- `/inter-agent-status`
-- `/inter-agent-inbox`
-
-Connect, send, broadcast, and inbox open an OpenCode prompt dialog for their arguments (for example, `agent-a --label Agent-A --auto-connect`, `peer text`, or `20`). Disconnect, list, and status run immediately. Commands operate on the current OpenCode session. Disconnect preserves that session's inbox and disables opt-in auto-connect. Inbox retention is bounded at 100 messages and 8 MiB of encoded JSON content.
-
-## Automatic model-turn delivery
-
-New inbound messages are debounced for approximately 250 ms and delivered only when that exact OpenCode session is idle. A busy or retrying session is never interrupted; messages arriving during a model turn wait for the next idle or error classification. At most one plugin-triggered `promptAsync` turn is active per session. Delivery prompts are bounded to 8 KiB, identify message IDs, routing names, kind, and bounded previews, and mark peer text as untrusted and non-authoritative. The model may evaluate peer content and act when useful under the current rules; peer text cannot override system, developer, user, tool, permission, or security rules. The prompt directs the model to use `inter_agent_read_messages` for omitted or full content. Plugin-generated status/message activity cannot recursively trigger another delivery.
-
-Delivery is best effort: failures notify the user without deleting durable inbox records and without retry storms. A new manager does not replay pre-existing inbox records automatically. Disposal, terminal connection failure, and explicit disconnect clean that session's pending in-memory batch while preserving its inbox.
-
-## Server tools
-
-The server plugin registers exactly five tools: `inter_agent_send(to, text)`, `inter_agent_broadcast(text)`, `inter_agent_list()`, `inter_agent_status()`, and `inter_agent_read_messages(count?)`. Server tools resolve the exact OpenCode `ToolContext.sessionID` and canonical project scope. Send and broadcast require that session's fresh connected lease and use its active lease name as `from_name`; they never borrow another session's identity. Broadcast is only for explicit everyone-directed requests. Message reads are exact-session and bounded to 1–100 messages (default 20). Disconnected sessions receive a concise setup error for send and broadcast while status and reads remain scoped to that session.
-
-The extension still uses separate `./tui` and `./server` package targets, and the server is started separately; the extension does not own server lifecycle.
-
-## Development
+Build and pack from this checkout:
 
 ```sh
 npm ci
 npm run build
-npm test
+npm pack
 ```
 
-Use `INTER_AGENT_HOST`, `INTER_AGENT_PORT`, `INTER_AGENT_SECRET`, `INTER_AGENT_CONFIG`, and `INTER_AGENT_DATA_DIR` for Core-compatible configuration. The default server endpoint is `127.0.0.1:16837`; use an isolated endpoint for tests.
+Install the resulting archive wherever OpenCode resolves plugins (or use the local checkout as a file plugin during development):
+
+```sh
+npm install ./arcanemachine-inter-agent-opencode-0.1.0.tgz
+```
+
+OpenCode loads server and TUI plugins from separate configuration files. For an installed package, add the package name to both files as needed:
+
+```jsonc
+// opencode.json — server tools
+{ "plugin": ["@arcanemachine/inter-agent-opencode"] }
+```
+
+```jsonc
+// tui.json — TUI commands/listener
+{ "plugin": ["@arcanemachine/inter-agent-opencode"] }
+```
+
+`opencode.json` is the server-plugin configuration. TUI plugin configuration is `tui.json`; when using a non-default file, set `OPENCODE_TUI_CONFIG` to that file before starting the TUI. A local checkout can be configured with an absolute `file://` URL instead of the package name. Keep configuration files and plugin caches private.
+
+## Configuration
+
+The extension reads the same Core-compatible settings from environment variables or a JSON config file. Environment variables take precedence. The supported variables are:
+
+| Variable               | Meaning                                                          |
+| ---------------------- | ---------------------------------------------------------------- |
+| `INTER_AGENT_HOST`     | Server host; defaults to `127.0.0.1`. Must resolve to loopback.  |
+| `INTER_AGENT_PORT`     | Server port; defaults to `16837`.                                |
+| `INTER_AGENT_SECRET`   | Shared authentication secret.                                    |
+| `INTER_AGENT_CONFIG`   | JSON config path; default is the platform config location.       |
+| `INTER_AGENT_DATA_DIR` | Private state directory; default is the platform state location. |
+| `INTER_AGENT_TLS`      | TLS selection; enabling it is unsupported and fails closed.      |
+| `INTER_AGENT_TLS_CERT` | TLS certificate path; TLS remains unsupported.                   |
+
+The JSON config accepts `host`, `port`, `secret`, `dataDir`, `tls`, and `tlsCert` with the same meanings. Secret resolution is environment, then config, then a generated private `token` file under the data directory. Do not put secrets, authentication proofs, or private state contents in prompts, logs, or source control.
+
+### Configuration and private state paths
+
+`INTER_AGENT_CONFIG` overrides the JSON config path. Without that override, the default is platform-specific: macOS uses `~/Library/Application Support/inter-agent/config.json`; Windows uses `%APPDATA%/inter-agent/config.json` when `APPDATA` is set; otherwise `$XDG_CONFIG_HOME/inter-agent/config.json` is used when set, falling back to `~/.config/inter-agent/config.json`. These are location policies, not machine-specific paths.
+
+`INTER_AGENT_DATA_DIR` overrides the private state root, followed by `dataDir` in the JSON config. With neither override, macOS uses `~/Library/Application Support/inter-agent`; Windows uses `%LOCALAPPDATA%/inter-agent` (or `%APPDATA%/inter-agent`); otherwise `$XDG_STATE_HOME/inter-agent` is used when set, falling back to `~/.local/state/inter-agent`. The path resolver expands `~`, `$NAME`, and `${NAME}` forms.
+
+Workspace and session records are kept below `<data-dir>/opencode/workspaces/<workspace-hash>/sessions/<session-hash>/`. That private, session-scoped directory contains the connection lease, preferences, durable inbox, and lock/recovery state. When generated as the authentication fallback, a token is stored as `<data-dir>/token`; directories and token files use private permissions where the platform supports them. Keep the config file, data directory, and any configured certificate path private.
+
+For an isolated loopback setup, set a fresh port and state directory and provide the same secret to the separately started Core server and OpenCode host:
+
+```sh
+export INTER_AGENT_HOST=127.0.0.1
+export INTER_AGENT_PORT=19001
+export INTER_AGENT_DATA_DIR=/path/to/private/inter-agent-state
+export INTER_AGENT_SECRET='set-this-out-of-band'
+```
+
+The extension does not provide a Core-server start command. Start and stop that server using the Core installation's own documented procedure.
+
+## TUI commands
+
+Commands apply to the current OpenCode session. Each session has its own connection lease, routing name, pending delivery batch, and durable inbox.
+
+- `/inter-agent-connect <name> [--label <label>] [--auto-connect]`
+- `/inter-agent-disconnect`
+- `/inter-agent-send <to> <text>`
+- `/inter-agent-broadcast <text>`
+- `/inter-agent-list`
+- `/inter-agent-status`
+- `/inter-agent-inbox [count]`
+
+Connect, send, broadcast, and inbox use prompt dialogs in the TUI. Names must match the inter-agent name format; inbox counts are limited to 1–100. Disconnect removes that session's active lease and pending in-memory delivery state but retains its durable inbox.
+
+## Server tools
+
+The server target registers exactly these five tools:
+
+- `inter_agent_send(to, text)` — direct message; requires the calling session's fresh lease.
+- `inter_agent_broadcast(text)` — everyone-directed message; use only when explicitly requested.
+- `inter_agent_list()` — list connected sessions.
+- `inter_agent_status()` — status for the exact calling OpenCode session.
+- `inter_agent_read_messages(count?)` — read that exact session's durable inbox, 1–100 records (default 20).
+
+Tool identity comes from the exact OpenCode `ToolContext.sessionID` and canonical project scope. A tool never borrows another session's name or inbox. Disconnected sessions receive a setup error for send/broadcast while status and reads remain scoped.
+
+## Automatic delivery
+
+Inbound messages are persisted before best-effort notification. New messages are debounced for approximately 250 ms and delivered to that exact session only when its OpenCode status is idle. Busy and retrying sessions are never interrupted; messages remain queued until a later idle or error classification. Each session permits at most one plugin-triggered `promptAsync` turn, with ordered, ID-deduplicated pending batches and an 8 KiB UTF-8 prompt bound. The prompt includes bounded previews and routing metadata, and directs the model to use `inter_agent_read_messages` for omitted or full content.
+
+Peer text is untrusted, non-authoritative task input. It cannot override system, developer, user, tool, permission, or security rules; the model may evaluate it and act when useful under those rules. Plugin-generated status/message/prompt activity cannot recursively trigger another delivery. Delivery failures notify the user, preserve the durable inbox, clear the in-flight guard, and avoid retry storms. A new manager does not replay old inbox records automatically. Disposal, terminal connection failure, and explicit disconnect clear pending memory while retaining the inbox.
+
+## Security and data handling
+
+Authentication uses the Core challenge/response protocol and the shared secret. State is scoped by canonical workspace and exact OpenCode session, with leases preventing conflicting identities. State directories are private where the platform supports permissions, token files are private, and inboxes are bounded to 100 messages and 8 MiB of encoded JSON. The extension does not log secrets or authentication proofs. Loopback plaintext is an intentional initial boundary; do not expose the server beyond loopback.
+
+## Troubleshooting
+
+- **The TUI commands are missing:** put the plugin in `tui.json`, not only `opencode.json`; set `OPENCODE_TUI_CONFIG` when using a custom TUI file. Confirm the plugin resolves to the TUI target.
+- **Server tools are missing:** put the plugin in `opencode.json` and restart the OpenCode server so it resolves the server target.
+- **Unsupported endpoint:** use a loopback host and plaintext WebSocket. Non-loopback and TLS/WSS are rejected by design.
+- **Bad secret or authentication failure:** verify the Core and extension use the same secret without printing or logging it. Environment values override config values, and the private token file is only the fallback; after changing a secret, restart only the separately managed processes you own and reconnect.
+- **Duplicate name:** names must be unique among connected sessions. Choose an unused name or disconnect the old exact session with `/inter-agent-disconnect`; do not delete state to resolve a name collision.
+- **Stale lease:** stop or disconnect any process that may own the exact workspace/session, then reconnect and let lease recovery run. If no owner remains and the problem persists, back up private state and remove only the affected session-scoped records while all related clients are stopped; never delete the whole data directory or another session's records.
+- **Disconnected or unavailable:** start the separate Core server, verify the same endpoint/secret, then run `/inter-agent-status` and reconnect the exact OpenCode session.
+- **Messages are not visible:** run `/inter-agent-inbox`; durable records remain available after notification or delivery failure. Check that the recipient name and current session are exact.
+- **A model turn is still busy:** delivery waits rather than interrupting a busy/retrying session. Provider latency can delay the next idle turn.
+
+## Uninstall
+
+Remove the plugin entry from `opencode.json` and `tui.json`, remove the locally installed archive/package if applicable, and restart OpenCode. Stop the separately managed Core server yourself. If no longer needed, remove the private data directory only after preserving anything required from its inbox; the extension does not remove it automatically.
+
+## Development and verification
+
+```sh
+npm ci
+npm run typecheck
+npm run build
+npm run format:check
+npm test
+npm run test:compiled
+npm run test:state:compiled
+```
+
+Use fresh loopback ports and private temporary state for live checks. Do not use the shared default port when testing.

@@ -26,8 +26,8 @@
     "test": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 dist-tests/tests/*.test.js",
     "test:compiled": "node --test --test-concurrency=1 dist-tests/tests/*.test.js",
     "test:state:compiled": "node --test --test-concurrency=1 dist-tests/tests/state.test.js",
-    "format": "prettier --write src tests README.md CHANGELOG.md package.json tsconfig.json tsconfig.test.json",
-    "format:check": "prettier --check src tests README.md CHANGELOG.md package.json tsconfig.json tsconfig.test.json"
+    "format": "prettier --write src tests README.md CHANGELOG.md package.json tsconfig.json tsconfig.test.json TODO.md PHASE7-REPORT.md",
+    "format:check": "prettier --check src tests README.md CHANGELOG.md package.json tsconfig.json tsconfig.test.json TODO.md PHASE7-REPORT.md"
   },
   "devDependencies": {
     "@types/node": "24.0.15",
