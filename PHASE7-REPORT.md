@@ -62,7 +62,7 @@ All owned WSS Core/OpenCode processes, listeners, generated certificates, and te
 ## Documentation delivered
 
 - `README.md` now documents local installation/packing, separate server and TUI configuration, environment and JSON settings, commands, all five server tools, loopback/plaintext security, automatic delivery/reaction policy, troubleshooting, compatibility, development checks, and uninstall.
-- `TODO.md` records the remaining clean standalone Bun, Windows filesystem, and longer provider-backed busy-to-idle/tool UAT follow-ups.
+- `TODO.md` records the remaining clean standalone Bun and Windows filesystem follow-ups; the provider-backed busy-to-idle/tool UAT follow-up is verified below.
 
 ## Standalone Bun follow-up attempt
 
@@ -71,6 +71,17 @@ The executor environment does not provide Bun: `bun --version` and `command -v b
 ## Windows filesystem follow-up attempt
 
 The executor environment is Linux, not Windows: `uname -a` reported a Linux 6.8 x86_64 kernel, `/etc/os-release` reported Debian 13, `OSTYPE=linux-gnu`, and Node reported `process.platform=linux`. No Windows filesystem checks were run or emulated, so no Windows locking, permission, or symlink-protection result is claimed. The follow-up remains open. No source files were changed; only this report and `TODO.md` record the limitation.
+
+## Provider-backed OpenCode UAT follow-up
+
+The exact OpenCode `1.18.15` runtime and the environment-provided Synthetic provider were available. An isolated Core server and OpenCode server ran on fresh loopback ports with private temporary roots; the shared `127.0.0.1:16837` endpoint was not used. The provider model was `synthetic/hf:openai/gpt-oss-120b`; no credentials, prompts, message contents, session IDs, model output, or private paths were retained.
+
+- `opencode --version` reported `1.18.15`; the provider-backed `session.prompt_async` request returned HTTP 204.
+- While the provider session reported `busy`, two independently submitted inbound messages both succeeded. The first busy-to-idle transition occurred about 7.9 seconds after the first inbound submission; the second inbound was submitted about 0.6 seconds after the first. After idle, the queued delivery turn entered `busy` about 0.2 seconds later and returned to `idle` about 4.8 seconds after that.
+- Sanitized session metadata contained three user turns: the initial provider prompt, the busy provider prompt, and exactly one automatic delivery prompt. Completed model tool parts were two `inter_agent_status` calls and one `bash` call; the automatic delivery turn separately completed exactly one `inter_agent_read_messages` call reporting two inbox records, followed by an assistant completion.
+- A further 15-second idle observation saw no additional busy transition, duplicate delivery, or recursive delivery turn. This run did not leave a provider-latency limitation for the required busy-to-idle evidence.
+
+All owned Core/OpenCode processes, TUI session, listeners, private temporary roots, logs, and generated state were terminated or removed. No source files or protected repositories were modified.
 
 ## Limitations and explicit non-goals
 
