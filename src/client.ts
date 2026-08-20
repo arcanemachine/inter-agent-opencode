@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import {
   endpointUri,
@@ -55,7 +56,19 @@ export interface WebSocketLike {
   close(code?: number, reason?: string): void;
 }
 
-export type WebSocketFactory = (url: string) => WebSocketLike;
+export type WebSocketFactory = (
+  url: string,
+  tlsCertPath?: string,
+) => WebSocketLike;
+
+type WebSocketConstructor = new (
+  url: string,
+  options?: unknown,
+) => WebSocketLike;
+
+type BunRuntime = {
+  readonly WebSocket?: unknown;
+};
 
 export type ClientOptions = {
   endpoint?: EndpointResolution;
@@ -79,11 +92,33 @@ export type AgentConnectionOptions = ClientOptions & {
   label?: string | null;
 };
 
-export function defaultWebSocketFactory(url: string): WebSocketLike {
-  const Constructor = globalThis.WebSocket;
+export function defaultWebSocketFactory(
+  url: string,
+  tlsCertPath?: string,
+): WebSocketLike {
+  const Constructor = globalThis.WebSocket as unknown as
+    | WebSocketConstructor
+    | undefined;
   if (typeof Constructor !== "function")
     throw new ConnectionError("native WebSocket is unavailable");
-  return new Constructor(url) as unknown as WebSocketLike;
+  if (!tlsCertPath) return new Constructor(url);
+
+  const bun = (globalThis as unknown as { Bun?: BunRuntime }).Bun;
+  if (!bun)
+    throw new ConnectionError(
+      "WSS requires native Bun WebSocket TLS trust support",
+    );
+  let certificate: Uint8Array;
+  try {
+    certificate = readFileSync(tlsCertPath);
+  } catch {
+    throw new ConnectionError("unable to read inter-agent TLS certificate");
+  }
+  try {
+    return new Constructor(url, { tls: { ca: certificate } });
+  } catch {
+    throw new ConnectionError("unable to create inter-agent WSS WebSocket");
+  }
 }
 
 class SocketSession {
@@ -498,8 +533,12 @@ function createSocket(
   endpoint: EndpointResolution,
 ): WebSocketLike {
   try {
-    return factory(endpointUri(endpoint));
-  } catch {
+    return factory(
+      endpointUri(endpoint),
+      endpoint.tls ? endpoint.tlsCertPath : undefined,
+    );
+  } catch (error) {
+    if (error instanceof InterAgentError) throw error;
     throw new ConnectionError("unable to create inter-agent WebSocket");
   }
 }

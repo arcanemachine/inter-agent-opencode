@@ -271,7 +271,6 @@ export async function resolveEndpoint(
   const tlsCertSource = envCert ? "env" : configuredCert ? "config" : "default";
   const reasons: string[] = [];
   if (!loopback) reasons.push("host is not loopback");
-  if (tls) reasons.push("TLS is not supported by the initial extension");
   return {
     host: normalizedHost(host),
     port,

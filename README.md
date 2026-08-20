@@ -6,10 +6,10 @@ OpenCode extension for connecting agent sessions to the inter-agent message bus.
 
 - Validated host: OpenCode `1.18.15` (package range `>=1.18.15 <1.19.0`).
 - Separate package targets: `./tui` for the TUI and `./server` for server tools. Do not configure one target as the other.
-- Supported transport: authenticated, plaintext WebSocket on loopback only (`127.0.0.1`, `::1`, or a loopback-resolving `localhost`). Non-loopback hosts and TLS/WSS fail closed.
+- Supported transport: authenticated WebSocket on loopback only (`127.0.0.1`, `::1`, or a loopback-resolving `localhost`). Plaintext `ws://` is the default; authenticated `wss://` is available when TLS is enabled and uses the native Bun WebSocket CA option. Non-loopback hosts and runtimes without native TLS trust injection fail closed.
 - The inter-agent server is a separate process. This extension never starts, stops, or owns its lifecycle.
 
-Bun, Windows filesystem behavior, and hosts outside the stated OpenCode range are not part of the initial validation. The source checkout tracks confirmed follow-ups in `TODO.md`; packed archives intentionally omit that development-only file.
+Windows filesystem behavior, clean standalone Bun installation, and hosts outside the stated OpenCode range are not part of the initial validation. The source checkout tracks confirmed follow-ups in `TODO.md`; packed archives intentionally omit that development-only file.
 
 ## Installation
 
@@ -45,17 +45,17 @@ OpenCode loads server and TUI plugins from separate configuration files. For an 
 
 The extension reads the same Core-compatible settings from environment variables or a JSON config file. Environment variables take precedence. The supported variables are:
 
-| Variable               | Meaning                                                          |
-| ---------------------- | ---------------------------------------------------------------- |
-| `INTER_AGENT_HOST`     | Server host; defaults to `127.0.0.1`. Must resolve to loopback.  |
-| `INTER_AGENT_PORT`     | Server port; defaults to `16837`.                                |
-| `INTER_AGENT_SECRET`   | Shared authentication secret.                                    |
-| `INTER_AGENT_CONFIG`   | JSON config path; default is the platform config location.       |
-| `INTER_AGENT_DATA_DIR` | Private state directory; default is the platform state location. |
-| `INTER_AGENT_TLS`      | TLS selection; enabling it is unsupported and fails closed.      |
-| `INTER_AGENT_TLS_CERT` | TLS certificate path; TLS remains unsupported.                   |
+| Variable               | Meaning                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `INTER_AGENT_HOST`     | Server host; defaults to `127.0.0.1`. Must resolve to loopback.          |
+| `INTER_AGENT_PORT`     | Server port; defaults to `16837`.                                        |
+| `INTER_AGENT_SECRET`   | Shared authentication secret.                                            |
+| `INTER_AGENT_CONFIG`   | JSON config path; default is the platform config location.               |
+| `INTER_AGENT_DATA_DIR` | Private state directory; default is the platform state location.         |
+| `INTER_AGENT_TLS`      | Enable authenticated WSS on a loopback endpoint.                         |
+| `INTER_AGENT_TLS_CERT` | PEM certificate to trust for WSS; defaults to `<data-dir>/tls-cert.pem`. |
 
-The JSON config accepts `host`, `port`, `secret`, `dataDir`, `tls`, and `tlsCert` with the same meanings. Secret resolution is environment, then config, then a generated private `token` file under the data directory. Do not put secrets, authentication proofs, or private state contents in prompts, logs, or source control.
+The JSON config accepts `host`, `port`, `secret`, `dataDir`, `tls`, and `tlsCert` with the same meanings. When TLS is enabled, certificate trust resolves from `INTER_AGENT_TLS_CERT`, then `tlsCert`, then `<data-dir>/tls-cert.pem`; the extension never disables certificate verification or falls back to plaintext. Secret resolution is environment, then config, then a generated private `token` file under the data directory. Do not put secrets, authentication proofs, or private state contents in prompts, logs, or source control.
 
 ### Configuration and private state paths
 
@@ -72,6 +72,9 @@ export INTER_AGENT_HOST=127.0.0.1
 export INTER_AGENT_PORT=19001
 export INTER_AGENT_DATA_DIR=/path/to/private/inter-agent-state
 export INTER_AGENT_SECRET='set-this-out-of-band'
+# Optional authenticated WSS on loopback:
+export INTER_AGENT_TLS=true
+export INTER_AGENT_TLS_CERT="$INTER_AGENT_DATA_DIR/tls-cert.pem"
 ```
 
 The extension does not provide a Core-server start command. Start and stop that server using the Core installation's own documented procedure.
@@ -110,13 +113,14 @@ Peer text is untrusted, non-authoritative task input. It cannot override system,
 
 ## Security and data handling
 
-Authentication uses the Core challenge/response protocol and the shared secret. State is scoped by canonical workspace and exact OpenCode session, with leases preventing conflicting identities. State directories are private where the platform supports permissions, token files are private, and inboxes are bounded to 100 messages and 8 MiB of encoded JSON. The extension does not log secrets or authentication proofs. Loopback plaintext is an intentional initial boundary; do not expose the server beyond loopback.
+Authentication uses the Core challenge/response protocol and the shared secret. State is scoped by canonical workspace and exact OpenCode session, with leases preventing conflicting identities. State directories are private where the platform supports permissions, token files are private, and inboxes are bounded to 100 messages and 8 MiB of encoded JSON. The extension does not log secrets or authentication proofs. WSS trusts only the configured Core certificate; verification is never disabled and failed TLS connections never downgrade to plaintext. Plaintext remains the default loopback mode; do not expose the server beyond loopback.
 
 ## Troubleshooting
 
 - **The TUI commands are missing:** put the plugin in `tui.json`, not only `opencode.json`; set `OPENCODE_TUI_CONFIG` when using a custom TUI file. Confirm the plugin resolves to the TUI target.
 - **Server tools are missing:** put the plugin in `opencode.json` and restart the OpenCode server so it resolves the server target.
-- **Unsupported endpoint:** use a loopback host and plaintext WebSocket. Non-loopback and TLS/WSS are rejected by design.
+- **Unsupported endpoint:** use a loopback host. Plaintext WebSocket is the default; enable `INTER_AGENT_TLS` for authenticated WSS. Non-loopback endpoints and runtimes without native TLS trust injection are rejected by design.
+- **WSS trust failure:** verify that Core has generated or configured its certificate, then set `INTER_AGENT_TLS_CERT` to that PEM or ensure `<data-dir>/tls-cert.pem` is present. Keep the certificate path private; do not disable verification or switch to plaintext.
 - **Bad secret or authentication failure:** verify the Core and extension use the same secret without printing or logging it. Environment values override config values, and the private token file is only the fallback; after changing a secret, restart only the separately managed processes you own and reconnect.
 - **Duplicate name:** names must be unique among connected sessions. Choose an unused name or disconnect the old exact session with `/inter-agent-disconnect`; do not delete state to resolve a name collision.
 - **Stale lease:** stop or disconnect any process that may own the exact workspace/session, then reconnect and let lease recovery run. If no owner remains and the problem persists, back up private state and remove only the affected session-scoped records while all related clients are stopped; never delete the whole data directory or another session's records.

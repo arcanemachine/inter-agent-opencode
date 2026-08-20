@@ -1,15 +1,20 @@
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AgentConnection,
   ControlConnection,
+  defaultWebSocketFactory,
   type WebSocketFactory,
   type WebSocketLike,
 } from "../src/client.js";
 import {
   AuthenticationError,
+  ConnectionError,
   RemoteError,
   TimeoutError,
 } from "../src/errors.js";
@@ -79,6 +84,97 @@ function endpoint(
     ...overrides,
   };
 }
+
+function setGlobalValue(name: string, value: unknown): void {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
+test("native Bun WSS factory supplies the configured certificate as a CA", () => {
+  const root = mkdtempSync(join(tmpdir(), "inter-agent-opencode-wss-unit-"));
+  const certificatePath = join(root, "tls-cert.pem");
+  const certificate = Buffer.from("test certificate bytes");
+  writeFileSync(certificatePath, certificate);
+  const webSocketDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "WebSocket",
+  );
+  const bunDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Bun");
+  let captured: { url: string; options: unknown } | undefined;
+  class NativeSocket implements WebSocketLike {
+    readonly readyState = 0;
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    onclose: ((event: { code?: number; reason?: string }) => void) | null =
+      null;
+
+    constructor(url: string, options?: unknown) {
+      captured = { url, options };
+    }
+
+    send(): void {}
+    close(): void {}
+  }
+  try {
+    setGlobalValue("WebSocket", NativeSocket);
+    setGlobalValue("Bun", {});
+    defaultWebSocketFactory("wss://127.0.0.1:19001", certificatePath);
+    assert.equal(captured?.url, "wss://127.0.0.1:19001");
+    assert.deepEqual(captured?.options, { tls: { ca: certificate } });
+  } finally {
+    if (webSocketDescriptor)
+      Object.defineProperty(globalThis, "WebSocket", webSocketDescriptor);
+    else delete (globalThis as { WebSocket?: unknown }).WebSocket;
+    if (bunDescriptor) Object.defineProperty(globalThis, "Bun", bunDescriptor);
+    else delete (globalThis as { Bun?: unknown }).Bun;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("WSS fails closed when the native runtime has no TLS trust API", async () => {
+  const webSocketDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "WebSocket",
+  );
+  const bunDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Bun");
+  class NativeSocket implements WebSocketLike {
+    readonly readyState = 0;
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    onclose: ((event: { code?: number; reason?: string }) => void) | null =
+      null;
+    send(): void {}
+    close(): void {}
+  }
+  try {
+    setGlobalValue("WebSocket", NativeSocket);
+    setGlobalValue("Bun", undefined);
+    assert.throws(
+      () => defaultWebSocketFactory("wss://127.0.0.1:19001", "/cert.pem"),
+      (error: unknown) =>
+        error instanceof ConnectionError &&
+        /native Bun WebSocket TLS trust support/.test(error.message),
+    );
+    await assert.rejects(
+      ControlConnection.open({
+        endpoint: endpoint({ tls: true, scheme: "wss" }),
+        secret: "test-secret",
+      }),
+      /native Bun WebSocket TLS trust support/,
+    );
+  } finally {
+    if (webSocketDescriptor)
+      Object.defineProperty(globalThis, "WebSocket", webSocketDescriptor);
+    else delete (globalThis as { WebSocket?: unknown }).WebSocket;
+    if (bunDescriptor) Object.defineProperty(globalThis, "Bun", bunDescriptor);
+    else delete (globalThis as { Bun?: unknown }).Bun;
+  }
+});
 
 test("persistent agent handshake receives inbound messages", async () => {
   const secret = randomBytes(16).toString("base64url");

@@ -91,7 +91,7 @@ test("environment values override config values and defaults", async () => {
   }
 });
 
-test("non-loopback and TLS endpoints fail closed", async () => {
+test("non-loopback endpoints fail closed and loopback TLS is supported", async () => {
   const root = tempRoot();
   try {
     const configFile = join(root, "missing.json");
@@ -107,12 +107,70 @@ test("non-loopback and TLS endpoints fail closed", async () => {
       UnsupportedEndpointError,
     );
     const tls = await resolveEndpoint({
-      env: { INTER_AGENT_CONFIG: configFile, INTER_AGENT_TLS: "tls" },
+      env: {
+        INTER_AGENT_CONFIG: configFile,
+        INTER_AGENT_DATA_DIR: join(root, "tls-state"),
+        INTER_AGENT_TLS: "tls",
+      },
       home: root,
       platform: "linux",
     });
-    assert.equal(tls.supported, false);
-    assert.match(tls.unsupportedReason ?? "", /TLS/);
+    assert.equal(tls.supported, true);
+    assert.equal(tls.scheme, "wss");
+    assert.equal(tls.tlsCertPath, join(root, "tls-state", "tls-cert.pem"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("TLS certificate trust source follows environment, config, then data dir", async () => {
+  const root = tempRoot();
+  try {
+    const configFile = join(root, "config.json");
+    writeFileSync(
+      configFile,
+      JSON.stringify({
+        tls: true,
+        tlsCert: join(root, "configured-cert.pem"),
+      }),
+    );
+    const fromEnv = await resolveEndpoint({
+      env: {
+        INTER_AGENT_CONFIG: configFile,
+        INTER_AGENT_DATA_DIR: join(root, "state"),
+        INTER_AGENT_HOST: "127.0.0.1",
+        INTER_AGENT_TLS_CERT: join(root, "environment-cert.pem"),
+      },
+      home: root,
+      platform: "linux",
+    });
+    assert.equal(fromEnv.tlsCertSource, "env");
+    assert.equal(fromEnv.tlsCertPath, join(root, "environment-cert.pem"));
+
+    const fromConfig = await resolveEndpoint({
+      env: {
+        INTER_AGENT_CONFIG: configFile,
+        INTER_AGENT_DATA_DIR: join(root, "state"),
+        INTER_AGENT_HOST: "127.0.0.1",
+      },
+      home: root,
+      platform: "linux",
+    });
+    assert.equal(fromConfig.tlsCertSource, "config");
+    assert.equal(fromConfig.tlsCertPath, join(root, "configured-cert.pem"));
+
+    const fromDataDir = await resolveEndpoint({
+      env: {
+        INTER_AGENT_CONFIG: join(root, "missing.json"),
+        INTER_AGENT_DATA_DIR: join(root, "state"),
+        INTER_AGENT_HOST: "127.0.0.1",
+        INTER_AGENT_TLS: "true",
+      },
+      home: root,
+      platform: "linux",
+    });
+    assert.equal(fromDataDir.tlsCertSource, "default");
+    assert.equal(fromDataDir.tlsCertPath, join(root, "state", "tls-cert.pem"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

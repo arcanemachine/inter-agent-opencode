@@ -48,14 +48,25 @@ Observed evidence:
 
 No secrets, authentication proofs, message contents, session IDs, or private temporary paths were retained in this report.
 
+## Core-compatible WSS follow-up
+
+The follow-up was implemented from accepted child commit `56768d0cfe94e720b76605ebded742acf2a5b959`. The read-only Core checkout used for live verification was `561b05e9c7f3422dd45ddfc935c39667a4586bb5`; the Core checkout remained clean. The OpenCode PTY displayed version `1.18.15` during the run.
+
+- Loopback TLS is now a supported endpoint mode. The native factory reads the certificate selected by `INTER_AGENT_TLS_CERT`, configured `tlsCert`, or `<data-dir>/tls-cert.pem` and passes its bytes as Bun's native `WebSocket` `tls.ca` option.
+- A runtime without the native Bun TLS trust API fails closed with no insecure option and no plaintext fallback.
+- An isolated live Core WSS server accepted the real OpenCode runtime's authenticated handshake and server-proof verification. The live probe exercised list, direct delivery, and broadcast delivery, then rejected a wrong certificate. Both the environment certificate source and the data-directory default source resolved to `wss://` and passed.
+- The focused unit suite verifies certificate source precedence, native CA injection, and fail-closed behavior when TLS trust injection is unavailable. Full tests passed 90/90.
+
+All owned WSS Core/OpenCode processes, listeners, generated certificates, and temporary roots were removed after verification. No certificate or key contents were retained.
+
 ## Documentation delivered
 
 - `README.md` now documents local installation/packing, separate server and TUI configuration, environment and JSON settings, commands, all five server tools, loopback/plaintext security, automatic delivery/reaction policy, troubleshooting, compatibility, development checks, and uninstall.
-- `TODO.md` records the mandatory Core-compatible WSS trust follow-up and the confirmed Bun, Windows filesystem, and longer provider-backed busy-to-idle/tool UAT follow-ups.
+- `TODO.md` records the remaining clean standalone Bun, Windows filesystem, and longer provider-backed busy-to-idle/tool UAT follow-ups.
 
 ## Limitations and explicit non-goals
 
-Bun execution, Windows locking/permissions/symlink behavior, OpenCode versions outside `>=1.18.15 <1.19.0`, non-loopback transport, TLS/WSS, server auto-start/lifecycle ownership, publication, release tags, remote pushes, ecosystem changes, protocol/Core changes, and Phase 8 work are not included. The extension does not remove Core state or inboxes during uninstall.
+Clean standalone Bun installation, Windows locking/permissions/symlink behavior, OpenCode versions outside `>=1.18.15 <1.19.0`, non-loopback transport, server auto-start/lifecycle ownership, publication, release tags, remote pushes, ecosystem changes, protocol/Core changes, and Phase 8 work are not included. The extension does not remove Core state or inboxes during uninstall.
 
 ## Cleanup and boundary status
 
