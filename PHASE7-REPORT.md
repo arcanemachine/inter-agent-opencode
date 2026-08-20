@@ -68,6 +68,10 @@ All owned WSS Core/OpenCode processes, listeners, generated certificates, and te
 
 The executor environment does not provide Bun: `bun --version` and `command -v bun` found no executable, and `asdf list bun` reported `No such plugin: bun`. Consequently, no clean Bun installation, package install, build/typecheck/format/test/import, or runtime result is claimed. The follow-up remains open. No source files were changed; only this report and `TODO.md` record the limitation.
 
+## Windows filesystem follow-up attempt
+
+The executor environment is Linux, not Windows: `uname -a` reported a Linux 6.8 x86_64 kernel, `/etc/os-release` reported Debian 13, `OSTYPE=linux-gnu`, and Node reported `process.platform=linux`. No Windows filesystem checks were run or emulated, so no Windows locking, permission, or symlink-protection result is claimed. The follow-up remains open. No source files were changed; only this report and `TODO.md` record the limitation.
+
 ## Limitations and explicit non-goals
 
 Clean standalone Bun installation, Windows locking/permissions/symlink behavior, OpenCode versions outside `>=1.18.15 <1.19.0`, non-loopback transport, server auto-start/lifecycle ownership, publication, release tags, remote pushes, ecosystem changes, protocol/Core changes, and Phase 8 work are not included. The extension does not remove Core state or inboxes during uninstall.
