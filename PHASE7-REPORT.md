@@ -64,6 +64,10 @@ All owned WSS Core/OpenCode processes, listeners, generated certificates, and te
 - `README.md` now documents local installation/packing, separate server and TUI configuration, environment and JSON settings, commands, all five server tools, loopback/plaintext security, automatic delivery/reaction policy, troubleshooting, compatibility, development checks, and uninstall.
 - `TODO.md` records the remaining clean standalone Bun, Windows filesystem, and longer provider-backed busy-to-idle/tool UAT follow-ups.
 
+## Standalone Bun follow-up attempt
+
+The executor environment does not provide Bun: `bun --version` and `command -v bun` found no executable, and `asdf list bun` reported `No such plugin: bun`. Consequently, no clean Bun installation, package install, build/typecheck/format/test/import, or runtime result is claimed. The follow-up remains open. No source files were changed; only this report and `TODO.md` record the limitation.
+
 ## Limitations and explicit non-goals
 
 Clean standalone Bun installation, Windows locking/permissions/symlink behavior, OpenCode versions outside `>=1.18.15 <1.19.0`, non-loopback transport, server auto-start/lifecycle ownership, publication, release tags, remote pushes, ecosystem changes, protocol/Core changes, and Phase 8 work are not included. The extension does not remove Core state or inboxes during uninstall.
