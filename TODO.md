@@ -1,7 +1,7 @@
-### 2. Verify clean installation and runtime behavior under Bun
+### 2. Verify clean installation and runtime behavior under Bun (verified)
 
 - Evidence/criteria: run the clean installation and runtime checks under Bun and record the results before considering this follow-up complete.
-- Executor verification attempt: Bun is unavailable in the verification environment. `bun --version` and `command -v bun` found no executable, and `asdf list bun` reported `No such plugin: bun`. No Bun installation, package install, build/typecheck/format/test/import, or runtime result is claimed; this follow-up remains open.
+- Executor verification: pass with Bun `1.3.14`. A clean disposable copy installed 31 packages under Bun; Bun build, typecheck, and format checks passed; the Node regression gate passed 90/90; focused Bun tests passed 12/12; direct and packed-consumer split-target imports passed in separate Bun processes; and the native Bun WSS CA-injection smoke passed. The exact OpenCode `1.18.15` source tag was not present in the available OpenCode checkout, so host-source provenance remains limited to the accepted package boundary.
 
 ### 3. Deferred: verify Windows locking, permissions, and symlink protections
 

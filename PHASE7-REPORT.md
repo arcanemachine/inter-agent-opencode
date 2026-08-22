@@ -62,11 +62,17 @@ All owned WSS Core/OpenCode processes, listeners, generated certificates, and te
 ## Documentation delivered
 
 - `README.md` now documents local installation/packing, separate server and TUI configuration, environment and JSON settings, commands, all five server tools, loopback/plaintext security, automatic delivery/reaction policy, troubleshooting, compatibility, development checks, and uninstall.
-- `TODO.md` records the remaining clean standalone Bun and Windows filesystem follow-ups; the provider-backed busy-to-idle/tool UAT follow-up is verified below.
+- `TODO.md` records the deferred Windows filesystem follow-up; Bun installation/runtime and provider-backed busy-to-idle/tool UAT follow-ups are verified below.
 
-## Standalone Bun follow-up attempt
+## Standalone Bun follow-up verification
 
-The executor environment does not provide Bun: `bun --version` and `command -v bun` found no executable, and `asdf list bun` reported `No such plugin: bun`. Consequently, no clean Bun installation, package install, build/typecheck/format/test/import, or runtime result is claimed. The follow-up remains open. No source files were changed; only this report and `TODO.md` record the limitation.
+The official Bun `bun-v1.3.14/bun-linux-x64-baseline.zip` release asset was acquired from the GitHub release metadata and verified before extraction. The API-reported and computed SHA-256 digest was `a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7`. Bun reported `1.3.14` (`1.3.14+0d9b296af`). The exact OpenCode `1.18.15` source tag was not present in the available OpenCode checkout, so host-source provenance remains limited to the accepted package boundary.
+
+- A clean disposable copy of accepted child `0de9bfb` installed 31 packages with Bun in about 0.76 s.
+- Bun `run build`, `run typecheck`, and `run format:check` passed in about 0.87 s, 0.81 s, and 0.67 s respectively. An initial unadjusted disposable-copy attempt exited 126 because the asdf Node shim had no version selection file; rerunning with the existing Node installation ahead of that shim passed, with no product defect identified.
+- The existing Node regression gate `npm test` passed 90/90 in about 21.2 s with the read-only Core checkout and direct `uv` runtime supplied through temporary test paths.
+- Bun focused compiled tests (`bun test dist-tests/tests/config.test.js dist-tests/tests/package.test.js`) passed 12/12 in about 0.08 s. Direct Bun imports of compiled `./tui` and `./server` passed in separate processes, as did separate packed-consumer imports after Bun installed the generated archive. A native Bun WSS CA-injection smoke passed without a listener or credentials.
+- No source or lockfile changes were made to the accepted child; only this report and `TODO.md` record the evidence.
 
 ## Windows filesystem follow-up attempt
 
@@ -85,7 +91,7 @@ All owned Core/OpenCode processes, TUI session, listeners, private temporary roo
 
 ## Limitations and explicit non-goals
 
-Clean standalone Bun installation, Windows locking/permissions/symlink behavior, OpenCode versions outside `>=1.18.15 <1.19.0`, non-loopback transport, server auto-start/lifecycle ownership, publication, release tags, remote pushes, ecosystem changes, protocol/Core changes, and Phase 8 work are not included. The extension does not remove Core state or inboxes during uninstall.
+Windows locking/permissions/symlink behavior, exact immutable OpenCode `1.18.15` source provenance, OpenCode versions outside `>=1.18.15 <1.19.0`, non-loopback transport, server auto-start/lifecycle ownership, publication, release tags, remote pushes, ecosystem changes, protocol/Core changes, and Phase 8 work are not included. The extension does not remove Core state or inboxes during uninstall.
 
 ## Cleanup and boundary status
 
