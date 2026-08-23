@@ -26,25 +26,19 @@ npm run build
 npm pack
 ```
 
-Install the resulting archive wherever OpenCode resolves plugins (or use the local checkout as a file plugin during development):
+Install and configure both plugin targets with OpenCode's installer:
 
 ```sh
-npm install /path/to/inter-agent-opencode.tgz
+opencode plugin /path/to/inter-agent-opencode.tgz
 ```
 
-OpenCode loads server and TUI plugins from separate configuration files. For an installed package, add the package name to both files as needed:
+For local development, point the same command at the checkout:
 
-```jsonc
-// opencode.json — server tools
-{ "plugin": ["@arcanemachine/inter-agent-opencode"] }
+```sh
+opencode plugin /workspace/projects/inter-agent-opencode
 ```
 
-```jsonc
-// tui.json — TUI commands/listener
-{ "plugin": ["@arcanemachine/inter-agent-opencode"] }
-```
-
-`opencode.json` is the server-plugin configuration. TUI plugin configuration is `tui.json`; when using a non-default file, set `OPENCODE_TUI_CONFIG` to that file before starting the TUI. A local checkout can be configured with an absolute `file://` URL instead of the package name. Keep configuration files and plugin caches private.
+The command installs the package and adds the server target to `opencode.json` and the TUI target to `tui.json`. Restart OpenCode after installation. If the TUI config lives at a custom path, set `OPENCODE_TUI_CONFIG` before starting OpenCode. Keep configuration files and plugin caches private.
 
 ## Configuration
 
