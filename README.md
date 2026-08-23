@@ -1,16 +1,20 @@
 # Inter-agent for OpenCode
 
-OpenCode extension for connecting agent sessions to the inter-agent message bus. The package is not published; install it from a local package archive or a local checkout.
+Connect OpenCode sessions to a local inter-agent server.
 
-## Compatibility and transport
+The extension adds:
 
-- Validated host: OpenCode `1.18.15` (package range `>=1.18.15 <1.19.0`).
-- Separate package targets: `./tui` for the TUI and `./server` for server tools. Do not configure one target as the other.
-- Supported transport: authenticated WebSocket on loopback only (`127.0.0.1`, `::1`, or a loopback-resolving `localhost`). Plaintext `ws://` is the default; authenticated `wss://` is available when TLS is enabled and uses the native Bun WebSocket CA option. Non-loopback hosts and runtimes without native TLS trust injection fail closed.
-- The inter-agent server is a separate process. This extension never starts, stops, or owns its lifecycle.
-- Clean installation and runtime checks pass under Bun `1.3.14`.
+- TUI commands to connect a session, send direct or broadcast messages, inspect peers, check status, and read the inbox.
+- Server tools for direct messages, broadcasts, peer listing, session status, and inbox reads.
+- Automatic delivery of inbound messages after the OpenCode session becomes idle.
 
-The package is validated against OpenCode `1.18.15`; the available source checkout records release-version commit `1ec6bdc8c666e315ba85ef5276fac9b0eb7ba109`, but it has no matching tag ref. The cached runtime binary's build provenance is not independently established.
+The Core server must already be running. This extension never starts, stops, or owns that server.
+
+## Transport and plugin targets
+
+- Connections stay on loopback addresses. Non-loopback endpoints fail closed.
+- Plaintext WebSockets are the default. Enable WSS when the Core server uses TLS. The client verifies the configured Core certificate and never falls back to plaintext.
+- The package has separate `./tui` and `./server` targets. Put the package in both `tui.json` and `opencode.json`; OpenCode loads the right target for each host.
 
 ## Installation
 
@@ -25,7 +29,7 @@ npm pack
 Install the resulting archive wherever OpenCode resolves plugins (or use the local checkout as a file plugin during development):
 
 ```sh
-npm install ./arcanemachine-inter-agent-opencode-0.1.0.tgz
+npm install /path/to/inter-agent-opencode.tgz
 ```
 
 OpenCode loads server and TUI plugins from separate configuration files. For an installed package, add the package name to both files as needed:
