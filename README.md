@@ -8,8 +8,9 @@ OpenCode extension for connecting agent sessions to the inter-agent message bus.
 - Separate package targets: `./tui` for the TUI and `./server` for server tools. Do not configure one target as the other.
 - Supported transport: authenticated WebSocket on loopback only (`127.0.0.1`, `::1`, or a loopback-resolving `localhost`). Plaintext `ws://` is the default; authenticated `wss://` is available when TLS is enabled and uses the native Bun WebSocket CA option. Non-loopback hosts and runtimes without native TLS trust injection fail closed.
 - The inter-agent server is a separate process. This extension never starts, stops, or owns its lifecycle.
+- Clean installation and runtime checks pass under Bun `1.3.14`.
 
-Windows filesystem behavior, clean standalone Bun installation, and hosts outside the stated OpenCode range are not part of the initial validation. The source checkout tracks confirmed follow-ups in `TODO.md`; packed archives intentionally omit that development-only file.
+The package is validated against OpenCode `1.18.15`; the available source checkout records release-version commit `1ec6bdc8c666e315ba85ef5276fac9b0eb7ba109`, but it has no matching tag ref. The cached runtime binary's build provenance is not independently established.
 
 ## Installation
 
