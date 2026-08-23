@@ -62,11 +62,11 @@ All owned WSS Core/OpenCode processes, listeners, generated certificates, and te
 ## Documentation delivered
 
 - `README.md` now documents local installation/packing, separate server and TUI configuration, environment and JSON settings, commands, all five server tools, loopback/plaintext security, automatic delivery/reaction policy, troubleshooting, compatibility, development checks, and uninstall.
-- `TODO.md` records the deferred Windows filesystem follow-up; Bun installation/runtime and provider-backed busy-to-idle/tool UAT follow-ups are verified below.
+- `TODO.md` records the verified Bun and provider-backed busy-to-idle/tool UAT follow-ups; deferred environment-specific validation is kept in `TODO-LATER.md`.
 
 ## Standalone Bun follow-up verification
 
-The official Bun `bun-v1.3.14/bun-linux-x64-baseline.zip` release asset was acquired from the GitHub release metadata and verified before extraction. The API-reported and computed SHA-256 digest was `a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7`. Bun reported `1.3.14` (`1.3.14+0d9b296af`). The exact OpenCode `1.18.15` source tag was not present in the available OpenCode checkout, so host-source provenance remains limited to the accepted package boundary.
+The official Bun `bun-v1.3.14/bun-linux-x64-baseline.zip` release asset was acquired from the GitHub release metadata and verified before extraction. The API-reported and computed SHA-256 digest was `a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7`. Bun reported `1.3.14` (`1.3.14+0d9b296af`). The available OpenCode checkout contains immutable release-version commit `1ec6bdc8c666e315ba85ef5276fac9b0eb7ba109` (`sync release versions for v1.18.15`), but no `v1.18.15` tag ref; this supplies a source reference, while the cached runtime binary's build provenance remains unproven.
 
 - A clean disposable copy of accepted child `0de9bfb` installed 31 packages with Bun in about 0.76 s.
 - Bun `run build`, `run typecheck`, and `run format:check` passed in about 0.87 s, 0.81 s, and 0.67 s respectively. An initial unadjusted disposable-copy attempt exited 126 because the asdf Node shim had no version selection file; rerunning with the existing Node installation ahead of that shim passed, with no product defect identified.
