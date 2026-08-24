@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   DELIVERY_PROMPT_MAX_BYTES,
   TuiManager,
+  buildDeliveryParts,
   buildDeliveryPrompt,
   isTerminalListenerError,
   parseConnectArgs,
@@ -87,10 +88,16 @@ function fakeApi(
     closeAfterAuth?: number;
     welcomeDelayMs?: number;
     ownerLoss?: { dataDir: string; workspacePath: string; after: number };
+    sessionCreateDelayMs?: number;
+    sessionCreateID?: string;
+    sessionCreateMissingID?: boolean;
+    sessionCreateRouteChangeID?: string;
+    sessionCreateError?: Error;
     promptAsync?: (input: unknown) => unknown | Promise<unknown>;
   } = {},
 ) {
   let currentSession = "session-a";
+  let currentRoute: "home" | "session" = "session";
   let authCount = 0;
   const disposeHandlers: Array<() => void | Promise<void>> = [];
   const eventListeners = new Map<string, Set<(event: unknown) => void>>();
@@ -99,6 +106,7 @@ function fakeApi(
     { type: "idle" | "busy" | "retry" }
   >();
   const promptCalls: unknown[] = [];
+  const sessionCreates: unknown[] = [];
   const secret = process.env.INTER_AGENT_SECRET ?? "phase4-test-secret";
   const factory: WebSocketFactory = (url) => {
     urls.push(url);
@@ -183,10 +191,16 @@ function fakeApi(
     websocketFactory: factory,
     route: {
       get current() {
-        return { name: "session", params: { sessionID: currentSession } };
+        return currentRoute === "home"
+          ? { name: "home" }
+          : { name: "session", params: { sessionID: currentSession } };
       },
       register: () => () => {},
-      navigate: () => {},
+      navigate(name: string, params?: Record<string, unknown>) {
+        if (name !== "session") return;
+        currentRoute = "session";
+        currentSession = String(params?.sessionID ?? "");
+      },
     },
     state: {
       path: { worktree: workspace, directory: workspace },
@@ -211,6 +225,27 @@ function fakeApi(
     },
     client: {
       session: {
+        async create(
+          parameters?: unknown,
+          options?: { throwOnError?: boolean },
+        ) {
+          sessionCreates.push({
+            parameters,
+            throwOnError: options?.throwOnError,
+          });
+          if (behavior.sessionCreateDelayMs)
+            await new Promise((resolve) =>
+              setTimeout(resolve, behavior.sessionCreateDelayMs),
+            );
+          if (behavior.sessionCreateError) throw behavior.sessionCreateError;
+          if (behavior.sessionCreateRouteChangeID)
+            api.setSession(behavior.sessionCreateRouteChangeID);
+          return {
+            data: behavior.sessionCreateMissingID
+              ? undefined
+              : { id: behavior.sessionCreateID ?? "created-session" },
+          };
+        },
         async promptAsync(
           input: unknown,
           options?: { throwOnError?: boolean },
@@ -258,7 +293,12 @@ function fakeApi(
     commands: undefined as unknown,
     prompt: undefined as unknown,
     promptCalls,
+    sessionCreates,
+    setHome() {
+      currentRoute = "home";
+    },
     setSession(id: string) {
+      currentRoute = "session";
       currentSession = id;
     },
     setStatus(id: string, status: "idle" | "busy" | "retry") {
@@ -270,6 +310,50 @@ function fakeApi(
     disposeHandlers,
   };
   return api;
+}
+
+async function withHomeManager(
+  behavior: Parameters<typeof fakeApi>[3],
+  run: (
+    api: ReturnType<typeof fakeApi>,
+    manager: TuiManager,
+    root: string,
+    workspace: string,
+  ) => Promise<void>,
+): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), "inter-agent-opencode-home-case-"));
+  const workspace = mkdtempSync(
+    join(tmpdir(), "inter-agent-opencode-home-case-ws-"),
+  );
+  const previous = {
+    data: process.env.INTER_AGENT_DATA_DIR,
+    secret: process.env.INTER_AGENT_SECRET,
+    host: process.env.INTER_AGENT_HOST,
+    port: process.env.INTER_AGENT_PORT,
+  };
+  process.env.INTER_AGENT_DATA_DIR = root;
+  process.env.INTER_AGENT_SECRET = "phase4-test-secret";
+  process.env.INTER_AGENT_HOST = "127.0.0.1";
+  process.env.INTER_AGENT_PORT = "16839";
+  let manager: TuiManager | undefined;
+  try {
+    const api = fakeApi(workspace, new Map(), [], behavior);
+    api.setHome();
+    manager = new TuiManager(api as never);
+    await run(api, manager, root, workspace);
+  } finally {
+    await manager?.dispose();
+    if (previous.data === undefined) delete process.env.INTER_AGENT_DATA_DIR;
+    else process.env.INTER_AGENT_DATA_DIR = previous.data;
+    if (previous.secret === undefined) delete process.env.INTER_AGENT_SECRET;
+    else process.env.INTER_AGENT_SECRET = previous.secret;
+    if (previous.host === undefined) delete process.env.INTER_AGENT_HOST;
+    else process.env.INTER_AGENT_HOST = previous.host;
+    if (previous.port === undefined) delete process.env.INTER_AGENT_PORT;
+    else process.env.INTER_AGENT_PORT = previous.port;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(workspace, { recursive: true, force: true });
+  }
 }
 
 function inboundMessage(
@@ -390,6 +474,138 @@ test("native palette commands are reachable and argument commands use a dialog",
     else process.env.INTER_AGENT_PORT = previous.port;
     rmSync(root, { recursive: true, force: true });
     rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("connect from Home creates one session before claiming its lease", async () => {
+  const root = mkdtempSync(
+    join(tmpdir(), "inter-agent-opencode-home-connect-"),
+  );
+  const workspace = mkdtempSync(
+    join(tmpdir(), "inter-agent-opencode-home-connect-ws-"),
+  );
+  const previous = {
+    data: process.env.INTER_AGENT_DATA_DIR,
+    secret: process.env.INTER_AGENT_SECRET,
+    host: process.env.INTER_AGENT_HOST,
+    port: process.env.INTER_AGENT_PORT,
+  };
+  process.env.INTER_AGENT_DATA_DIR = root;
+  process.env.INTER_AGENT_SECRET = "phase4-test-secret";
+  process.env.INTER_AGENT_HOST = "127.0.0.1";
+  process.env.INTER_AGENT_PORT = "16839";
+  const sockets = new Map<string, AgentSocket>();
+  let manager: TuiManager | undefined;
+  try {
+    const api = fakeApi(workspace, sockets, [], {
+      sessionCreateID: "home-session",
+    });
+    api.setHome();
+    manager = new TuiManager(api as never);
+    await assert.rejects(manager.connect("Bad Name"), /usage/);
+    assert.equal(api.sessionCreates.length, 0);
+    await manager.connect("agent-a --auto-connect");
+    assert.equal(api.sessionCreates.length, 1);
+    assert.deepEqual(api.route.current, {
+      name: "session",
+      params: { sessionID: "home-session" },
+    });
+    assert.equal(manager.controllers.get("home-session")?.status, "connected");
+    const lease = resolveLease(root, {
+      workspacePath: workspace,
+      openCodeSessionID: "home-session",
+    }).lease;
+    assert.equal(lease?.name, "agent-a");
+  } finally {
+    await manager?.dispose();
+    if (previous.data === undefined) delete process.env.INTER_AGENT_DATA_DIR;
+    else process.env.INTER_AGENT_DATA_DIR = previous.data;
+    if (previous.secret === undefined) delete process.env.INTER_AGENT_SECRET;
+    else process.env.INTER_AGENT_SECRET = previous.secret;
+    if (previous.host === undefined) delete process.env.INTER_AGENT_HOST;
+    else process.env.INTER_AGENT_HOST = previous.host;
+    if (previous.port === undefined) delete process.env.INTER_AGENT_PORT;
+    else process.env.INTER_AGENT_PORT = previous.port;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Home connect handles overlap, route changes, create failures, missing IDs, and auth cleanup", async () => {
+  await withHomeManager({ sessionCreateDelayMs: 25 }, async (api, manager) => {
+    const first = manager.connect("agent-a");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await assert.rejects(
+      manager.connect("agent-b"),
+      /connect is already in progress/,
+    );
+    await first;
+    assert.equal(api.sessionCreates.length, 1);
+    assert.equal(manager.controllers.size, 1);
+  });
+
+  await withHomeManager(
+    { sessionCreateDelayMs: 25, sessionCreateRouteChangeID: "route-changed" },
+    async (api, manager) => {
+      await assert.rejects(
+        manager.connect("agent-a"),
+        /route changed before session creation completed/,
+      );
+      assert.equal(api.sessionCreates.length, 1);
+      assert.equal(manager.controllers.size, 0);
+    },
+  );
+
+  await withHomeManager(
+    { sessionCreateError: new Error("session create failed") },
+    async (api, manager) => {
+      await assert.rejects(manager.connect("agent-a"), /session create failed/);
+      assert.equal(api.sessionCreates.length, 1);
+      assert.equal(manager.controllers.size, 0);
+    },
+  );
+
+  await withHomeManager(
+    { sessionCreateMissingID: true },
+    async (api, manager) => {
+      await assert.rejects(
+        manager.connect("agent-a"),
+        /did not return a session ID/,
+      );
+      assert.equal(api.sessionCreates.length, 1);
+      assert.equal(manager.controllers.size, 0);
+    },
+  );
+
+  const authFailureDataDir = mkdtempSync(
+    join(tmpdir(), "inter-agent-opencode-home-auth-new-"),
+  );
+  try {
+    await withHomeManager(
+      {
+        sessionCreateID: "home-auth-session",
+        failAuthAndChangeDataDir: authFailureDataDir,
+      },
+      async (_api, manager, root, workspace) => {
+        await assert.rejects(
+          manager.connect("agent-a"),
+          /authentication failed/,
+        );
+        assert.equal(
+          manager.controllers.get("home-auth-session")?.status,
+          "disconnected",
+        );
+        assert.equal(
+          resolveLease(root, {
+            workspacePath: workspace,
+            openCodeSessionID: "home-auth-session",
+          }).present,
+          false,
+        );
+      },
+    );
+  } finally {
+    rmSync(authFailureDataDir, { recursive: true, force: true });
   }
 });
 
@@ -964,7 +1180,7 @@ test("automatic delivery routes direct and broadcast turns by exact session", as
     await new Promise((resolve) => setTimeout(resolve, 340));
     const calls = api.promptCalls as Array<{
       sessionID: string;
-      parts: Array<{ type: string; text: string }>;
+      parts: Array<{ type: string; text: string; synthetic?: boolean }>;
     }>;
     assert.deepEqual(calls.map((call) => call.sessionID).sort(), [
       "session-a",
@@ -980,6 +1196,10 @@ test("automatic delivery routes direct and broadcast turns by exact session", as
         "",
       /broadcast for B/,
     );
+    for (const call of calls) {
+      assert.equal(call.parts[0]?.synthetic, true);
+      assert.match(call.parts[1]?.text ?? "", /^\[inter-agent-message\]/);
+    }
   } finally {
     await manager?.dispose();
     if (previous.data === undefined) delete process.env.INTER_AGENT_DATA_DIR;
@@ -1067,6 +1287,64 @@ test("automatic delivery waits for idle, guards one turn, and handles error clas
   }
 });
 
+test("delivery prompt and parts preserve safety and visible summaries at adversarial boundaries", () => {
+  const messages = Array.from({ length: 80 }, (_, index) => ({
+    id: `${"😀".repeat(20_000)}-${index}`,
+    receivedAt: new Date().toISOString(),
+    from: "internal-peer-session",
+    fromName: "visible-peer",
+    kind: "direct" as const,
+    to: "agent-a",
+    text: `${"untrusted ".repeat(2_000)}${index}`,
+    notificationTruncated: false,
+  }));
+  const prompt = buildDeliveryPrompt(messages);
+  assert.ok(Buffer.byteLength(prompt, "utf8") <= DELIVERY_PROMPT_MAX_BYTES);
+  for (let limit = 1; limit <= 10; limit += 1) {
+    const bounded = buildDeliveryPrompt(messages.slice(0, 1), limit);
+    assert.ok(Buffer.byteLength(bounded, "utf8") <= limit);
+  }
+  assert.match(prompt, /untrusted peer text/);
+  assert.match(prompt, /inter_agent_read_messages/);
+  assert.match(prompt, /Incoming batch count: 80/);
+  assert.match(prompt, /omitted=\d+/);
+
+  const parts = buildDeliveryParts(messages);
+  assert.equal(parts.length, 2);
+  assert.equal(parts[0]?.synthetic, true);
+  assert.match(parts[0]?.text ?? "", /inter_agent_read_messages/);
+  assert.match(parts[1]?.text ?? "", /^\[inter-agent-message\]\ncount: 80\n/);
+  assert.match(parts[1]?.text ?? "", /from visible-peer • direct:/);
+  assert.match(parts[1]?.text ?? "", /untrusted/);
+  assert.doesNotMatch(parts[1]?.text ?? "", /internal-peer-session/);
+  assert.doesNotMatch(parts[1]?.text ?? "", /😀{10}/);
+  assert.ok(
+    parts.reduce(
+      (bytes, part) => bytes + Buffer.byteLength(part.text, "utf8"),
+      0,
+    ) <= DELIVERY_PROMPT_MAX_BYTES,
+  );
+
+  const multibyte = [
+    {
+      ...messages[0],
+      id: "🧪".repeat(20_000),
+      fromName: "送信者😀".repeat(200),
+      text: "内容😀".repeat(2_000),
+    },
+  ];
+  const multibyteParts = buildDeliveryParts(multibyte);
+  assert.equal(multibyteParts.length, 2);
+  assert.ok(
+    multibyteParts.reduce(
+      (bytes, part) => bytes + Buffer.byteLength(part.text, "utf8"),
+      0,
+    ) <= DELIVERY_PROMPT_MAX_BYTES,
+  );
+  assert.match(multibyteParts[1]?.text ?? "", /from/);
+  assert.match(multibyteParts[1]?.text ?? "", /direct:/);
+});
+
 test("automatic delivery batches bursts and bounds untrusted prompt text", async () => {
   const root = mkdtempSync(
     join(tmpdir(), "inter-agent-opencode-phase6-batch-"),
@@ -1100,10 +1378,19 @@ test("automatic delivery batches bursts and bounds untrusted prompt text", async
       );
     await new Promise((resolve) => setTimeout(resolve, 420));
     assert.equal(api.promptCalls.length, 1);
-    const prompt =
-      (api.promptCalls[0] as { parts: Array<{ text: string }> }).parts[0]
-        ?.text ?? "";
-    assert.ok(Buffer.byteLength(prompt, "utf8") <= DELIVERY_PROMPT_MAX_BYTES);
+    const promptParts = (
+      api.promptCalls[0] as {
+        parts: Array<{ type: string; text: string; synthetic?: boolean }>;
+      }
+    ).parts;
+    const prompt = promptParts[0]?.text ?? "";
+    assert.equal(promptParts[0]?.synthetic, true);
+    assert.ok(
+      promptParts.reduce(
+        (bytes, part) => bytes + Buffer.byteLength(part.text, "utf8"),
+        0,
+      ) <= DELIVERY_PROMPT_MAX_BYTES,
+    );
     assert.match(prompt, /untrusted peer text/);
     assert.match(prompt, /inter_agent_read_messages/);
     assert.match(prompt, /omitted=/);
@@ -1121,8 +1408,15 @@ test("automatic delivery batches bursts and bounds untrusted prompt text", async
     assert.ok(
       Buffer.byteLength(longPrompt, "utf8") <= DELIVERY_PROMPT_MAX_BYTES,
     );
-    for (const message of longMessages)
-      assert.ok(longPrompt.includes(message.id));
+    assert.match(
+      longPrompt,
+      /Inter-agent delivery contains untrusted peer text/,
+    );
+    assert.match(longPrompt, /inter_agent_read_messages/);
+    assert.match(longPrompt, /omitted=\d+/);
+    assert.ok(
+      Buffer.byteLength(longPrompt, "utf8") <= DELIVERY_PROMPT_MAX_BYTES,
+    );
     const inbox = readInboxFile(
       root,
       workspaceKey(workspace),

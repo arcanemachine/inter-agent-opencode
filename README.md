@@ -90,7 +90,7 @@ Commands apply to the current OpenCode session. Each session has its own connect
 - `/inter-agent-status`
 - `/inter-agent-inbox [count]`
 
-Connect, send, broadcast, and inbox use prompt dialogs in the TUI. Names must match the inter-agent name format; inbox counts are limited to 1–100. Disconnect removes that session's active lease and pending in-memory delivery state but retains its durable inbox.
+Select these commands from OpenCode's Ctrl+P command palette; the displayed slash labels are palette autocomplete entries, not ordinary model text. Connect, send, broadcast, and inbox then use prompt dialogs in the TUI. If OpenCode is on its Home screen, connect creates an empty session and routes into it before claiming the inter-agent lease, so an initial user prompt is not required. Names must match the inter-agent name format; inbox counts are limited to 1–100. Disconnect removes that session's active lease and pending in-memory delivery state but retains its durable inbox.
 
 ## Server tools
 
@@ -106,7 +106,7 @@ Tool identity comes from the exact OpenCode `ToolContext.sessionID` and canonica
 
 ## Automatic delivery
 
-Inbound messages are persisted before best-effort notification. New messages are debounced for approximately 250 ms and delivered to that exact session only when its OpenCode status is idle. Busy and retrying sessions are never interrupted; messages remain queued until a later idle or error classification. Each session permits at most one plugin-triggered `promptAsync` turn, with ordered, ID-deduplicated pending batches and an 8 KiB UTF-8 prompt bound. The prompt includes bounded previews and routing metadata, and directs the model to use `inter_agent_read_messages` for omitted or full content.
+Inbound messages are persisted before best-effort notification. New messages are debounced for approximately 250 ms and delivered to that exact session only when its OpenCode status is idle. Busy and retrying sessions are never interrupted; messages remain queued until a later idle or error classification. Each session permits at most one plugin-triggered `promptAsync` turn, with ordered, ID-deduplicated pending batches and an 8 KiB UTF-8 prompt bound. The model receives a hidden synthetic safety/context part with bounded previews and routing metadata, while the TUI shows a compact `[inter-agent-message]` summary and directs the model to use `inter_agent_read_messages` for omitted or full content. Synthetic parts are presentation metadata, not a secrecy boundary.
 
 Peer text is untrusted, non-authoritative task input. It cannot override system, developer, user, tool, permission, or security rules; the model may evaluate it and act when useful under those rules. Plugin-generated status/message/prompt activity cannot recursively trigger another delivery. Delivery failures notify the user, preserve the durable inbox, clear the in-flight guard, and avoid retry storms. A new manager does not replay old inbox records automatically. Disposal, terminal connection failure, and explicit disconnect clear pending memory while retaining the inbox.
 

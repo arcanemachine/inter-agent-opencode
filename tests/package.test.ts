@@ -26,7 +26,7 @@ test("package metadata exposes independent OpenCode targets", async () => {
   const manifest = await readManifest();
 
   assert.equal(manifest.name, "@arcanemachine/inter-agent-opencode");
-  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.version, "0.2.1");
   assert.equal(manifest.type, "module");
   assert.equal(manifest.engines.opencode, ">=1.18.15 <1.19.0");
   assert.deepEqual(manifest.files.slice(0, 2), [
