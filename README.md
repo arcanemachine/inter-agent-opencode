@@ -1,6 +1,6 @@
 # Inter-agent for OpenCode
 
-Connect an OpenCode session to a separately running Inter-agent Core server.
+Connect an OpenCode session to a separately running [`inter-agent-core`](https://github.com/arcanemachine/inter-agent-core) server. For the cross-host component map, see the [inter-agent ecosystem guide](https://github.com/arcanemachine/inter-agent/tree/main/ecosystem).
 
 The extension adds OpenCode commands and server tools for:
 
@@ -17,7 +17,7 @@ The Core server remains a separate process. This extension never starts, stops, 
 You need:
 
 - OpenCode `>=1.18.15 <1.19.0`;
-- an Inter-agent Core server already running;
+- a separately managed [`inter-agent-core`](https://github.com/arcanemachine/inter-agent-core) server already running;
 - a loopback Core endpoint and shared secret;
 - permission to add plugins to the OpenCode project.
 
@@ -25,13 +25,13 @@ The default endpoint is `127.0.0.1:16837` over plaintext WebSockets. Use loopbac
 
 ## Install
 
-Install the current npm package with OpenCode's plugin installer:
+Install the published npm package (current release `0.2.2`) with OpenCode's plugin installer:
 
 ```sh
 opencode plugin @arcanemachine/inter-agent-opencode
 ```
 
-The installer adds the package to both plugin targets. OpenCode loads `./tui` for the TUI and `./server` for server tools. Restart OpenCode after installation.
+The installer adds the package to both plugin targets. OpenCode loads `./tui` for the TUI and `./server` for server tools. Restart OpenCode after installation. The extension connects to Core but never starts, stops, or configures the Core server; manage that process separately using the [Core documentation](https://github.com/arcanemachine/inter-agent-core/blob/main/README.md).
 
 For local development, install the checkout instead:
 
@@ -145,3 +145,7 @@ npm test
 ```
 
 The package keeps separate `./tui` and `./server` exports. Do not combine them into one target.
+
+## License
+
+MIT; see [`LICENSE.md`](LICENSE.md).

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Clarify the separately managed Core prerequisite and lifecycle boundary.
+- Add links to the Core security/runtime documentation and the ecosystem guide.
+- Synchronize the tracked npm lockfile metadata with the package release.
+
 ## 0.2.1
 
 - Clarify the command-palette label for connecting an OpenCode session.
