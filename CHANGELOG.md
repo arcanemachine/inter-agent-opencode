@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Correct the public ecosystem guide link in the README.
+- Update the published package metadata and lockfile to `0.2.3`.
+
 ## 0.2.2
 
 - Clarify the separately managed Core prerequisite and lifecycle boundary.

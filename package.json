@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@arcanemachine/inter-agent-opencode",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "OpenCode extension for connecting agent sessions to the inter-agent message bus.",
   "license": "MIT",
   "type": "module",

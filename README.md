@@ -1,6 +1,6 @@
 # Inter-agent for OpenCode
 
-Connect an OpenCode session to a separately running [`inter-agent-core`](https://github.com/arcanemachine/inter-agent-core) server. For the cross-host component map, see the [inter-agent ecosystem guide](https://github.com/arcanemachine/inter-agent/tree/main/ecosystem).
+Connect an OpenCode session to a separately running [`inter-agent-core`](https://github.com/arcanemachine/inter-agent-core) server. For the cross-host component map, see the [inter-agent ecosystem guide](https://github.com/arcanemachine/inter-agent).
 
 The extension adds OpenCode commands and server tools for:
 
@@ -25,7 +25,7 @@ The default endpoint is `127.0.0.1:16837` over plaintext WebSockets. Use loopbac
 
 ## Install
 
-Install the published npm package (current release `0.2.2`) with OpenCode's plugin installer:
+Install the published npm package (current release `0.2.3`) with OpenCode's plugin installer:
 
 ```sh
 opencode plugin @arcanemachine/inter-agent-opencode
