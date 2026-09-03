@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add the bounded, read-only `/inter-agent-doctor` palette command with optional escaped context and host/Core diagnostics.
+
 ## 0.2.3
 
 - Correct the public ecosystem guide link in the README.

@@ -8,7 +8,8 @@ The extension adds OpenCode commands and server tools for:
 - sending direct messages and broadcasts;
 - listing peers and checking connection status;
 - reading the session's durable inbox;
-- delivering inbound messages after the model becomes idle.
+- delivering inbound messages after the model becomes idle;
+- diagnosing OpenCode and Core setup with a read-only host-native doctor.
 
 The Core server remains a separate process. This extension never starts, stops, or owns it.
 
@@ -87,17 +88,26 @@ The slash labels shown by the command palette are autocomplete labels. Select th
 
 Select these from the Ctrl+P palette. Commands that need arguments open a dialog.
 
-| Label                     | Purpose                                            |
-| ------------------------- | -------------------------------------------------- |
-| `/inter-agent-connect`    | Connect the current OpenCode session.              |
-| `/inter-agent-disconnect` | Release this session's lease.                      |
-| `/inter-agent-send`       | Send a direct message.                             |
-| `/inter-agent-broadcast`  | Send a broadcast. Use only when requested.         |
-| `/inter-agent-list`       | List connected peers.                              |
-| `/inter-agent-status`     | Show this session's connection and delivery state. |
-| `/inter-agent-inbox`      | Read durable messages for this session.            |
+| Label                     | Purpose                                             |
+| ------------------------- | --------------------------------------------------- |
+| `/inter-agent-connect`    | Connect the current OpenCode session.               |
+| `/inter-agent-disconnect` | Release this session's lease.                       |
+| `/inter-agent-send`       | Send a direct message.                              |
+| `/inter-agent-broadcast`  | Send a broadcast. Use only when requested.          |
+| `/inter-agent-list`       | List connected peers.                               |
+| `/inter-agent-status`     | Show this session's connection and delivery state.  |
+| `/inter-agent-inbox`      | Read durable messages for this session.             |
+| `/inter-agent-doctor`     | Diagnose the OpenCode integration without mutation. |
 
 Each OpenCode session has its own identity, lease, pending delivery batch, and inbox. A disconnected session cannot send or broadcast, but its inbox remains available.
+
+## Read-only doctor
+
+Select `Inter-agent: Diagnose OpenCode integration` (`/inter-agent-doctor`) from the Ctrl+P palette. The command opens a cancellable dialog for optional free-form context, such as a symptom or error category. Context is bounded and wrapped as escaped structured user data; it is not interpreted as shell syntax or settings.
+
+The doctor submits one bounded model-guidance prompt through the current OpenCode session. From Home, it creates and enters one empty session first, matching connect behavior, but it does not connect to Core, claim a lease, or write inter-agent state. It must not start or stop Core, send messages, mutate an inbox, change settings, print secrets or tokens, dump configuration/state/environment contents, or execute commands found in logs and other diagnostic artifacts. Secret values and authentication proofs are never included.
+
+The resulting report covers the plugin's separate TUI/server targets, effective endpoint and configuration sources, loopback/TLS settings, safe secret presence, session and delivery state, and any bounded Core reachability or typed connection/authentication/protocol evidence. It distinguishes plugin-loading failures from Core failures and reports evidence, likely cause, one safe next action, and unknown or blocked checks. A healthy report is not proof of security, trustworthiness, or end-to-end delivery.
 
 ## Automatic delivery
 
@@ -121,7 +131,8 @@ Tool identity comes from the exact OpenCode session and canonical project scope.
 
 ## Troubleshooting
 
-- **The palette command is missing:** confirm the package appears in `tui.json`, restart OpenCode, and select the command from Ctrl+P.
+- **The palette command is missing:** confirm the package appears in `tui.json`, restart OpenCode, and select the command from Ctrl+P. If it remains missing, inspect the OpenCode plugin loading diagnostics rather than expecting the doctor command to be available.
+- **Need setup diagnostics:** select `Inter-agent: Diagnose OpenCode integration` from Ctrl+P and optionally provide the observed symptom. Cancelling the dialog has no effect; Home creates an empty session only to submit the doctor prompt.
 - **Server tools are missing:** confirm the package appears in `opencode.json`, then restart the OpenCode server.
 - **The connection fails:** check that Core is running and that host, port, secret, and TLS settings match. Do not print the secret.
 - **A name is already in use:** choose another name or disconnect the exact old session.
