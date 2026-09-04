@@ -275,6 +275,7 @@ Explain the evidence-based cause, or say what remains uncertain.
 Give one safe, concrete next step. Distinguish read-only diagnosis from any repair/setup that would require the user's approval.
 ## Unknowns or blocked checks
 Name checks not performed and why.
+When no failing result is found, use Diagnosis exactly as "No issues found in the checks performed." and Likely cause exactly as "None identified." Do not invent a failing layer or a repair step. If no relevant checks remain unknown or blocked, use Recommended next action exactly as "No action needed." Otherwise give one safe step that addresses the unknown or blocked check. Keep genuinely skipped or unverified checks here.
 Do not claim that local checks prove security, trustworthiness, or end-to-end delivery.`;
 
 const DOCTOR_CONTEXT_PREFIX = "<doctor-context>";
@@ -359,11 +360,15 @@ function parseWords(input: unknown): string[] {
   return [];
 }
 
+class CommandInputError extends Error {}
+
+class CommandCancelledError extends Error {}
+
 export function parseConnectArgs(input: unknown): ConnectArgs {
   const words = parseWords(input);
   const name = words.shift();
   if (!name || !validateName(name))
-    throw new Error(
+    throw new CommandInputError(
       "usage: /inter-agent-connect <name> [--label <label>] [--auto-connect]",
     );
   let label: string | null = null;
@@ -377,12 +382,12 @@ export function parseConnectArgs(input: unknown): ConnectArgs {
     if (option === "--label") {
       label = words.shift() ?? null;
       if (label === null || label.length === 0 || label.length > 200)
-        throw new Error(
+        throw new CommandInputError(
           "--label requires a non-empty label of at most 200 characters",
         );
       continue;
     }
-    throw new Error(`unknown connect option: ${option}`);
+    throw new CommandInputError(`unknown connect option: ${option}`);
   }
   return { name, label, autoConnect };
 }
@@ -440,6 +445,17 @@ function errorText(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "inter-agent operation failed";
+}
+
+function appendFailureGuidance(message: string, guidance: string): string {
+  const separator = /[.!?]$/.test(message) ? "" : ".";
+  return `${message}${separator} ${guidance}`;
+}
+
+function isNonOperationalCommandFailure(error: unknown): boolean {
+  return (
+    error instanceof CommandInputError || error instanceof CommandCancelledError
+  );
 }
 
 export function isTerminalListenerError(error: unknown): boolean {
@@ -709,7 +725,7 @@ class SessionController {
           claimed.sessionHash,
           claimed.ownerToken,
         );
-        throw new Error("connection cancelled");
+        throw new CommandCancelledError("connection cancelled");
       }
       writePreferences(
         endpoint.dataDir,
@@ -1295,7 +1311,7 @@ export class TuiManager {
     const to = words.shift();
     const text = words.join(" ");
     if (!to || !validateName(to) || !text)
-      throw new Error("usage: /inter-agent-send <to> <text>");
+      throw new CommandInputError("usage: /inter-agent-send <to> <text>");
     const controller = this.currentController();
     const lease = controller.currentLease;
     if (!lease || controller.status !== "connected")
@@ -1315,7 +1331,8 @@ export class TuiManager {
 
   async broadcast(input: unknown): Promise<string> {
     const text = parseWords(input).join(" ");
-    if (!text) throw new Error("usage: /inter-agent-broadcast <text>");
+    if (!text)
+      throw new CommandInputError("usage: /inter-agent-broadcast <text>");
     const controller = this.currentController();
     const lease = controller.currentLease;
     if (!lease || controller.status !== "connected")
@@ -1392,7 +1409,7 @@ export class TuiManager {
     const words = parseWords(input);
     const count = words.length ? Number(words[0]) : DEFAULT_INBOX_COUNT;
     if (!Number.isInteger(count) || count < 1 || count > MAX_INBOX_COUNT)
-      throw new Error("inbox count must be between 1 and 100");
+      throw new CommandInputError("inbox count must be between 1 and 100");
     const controller = this.currentController();
     const scope = await this.sessionScope(controller.sessionID);
     const records = readInboxFile(
@@ -1423,6 +1440,7 @@ export class TuiManager {
     title: string,
     placeholder: string,
     callback: (value: string) => Promise<string>,
+    options: { doctor?: boolean } = {},
   ): void {
     this.api.ui.dialog.replace(() =>
       this.api.ui.DialogPrompt({
@@ -1430,7 +1448,9 @@ export class TuiManager {
         placeholder,
         onConfirm: (value: string) => {
           this.api.ui.dialog.clear();
-          void callback(value).catch((error) => this.commandError(error));
+          void callback(value).catch((error) =>
+            this.commandError(error, options),
+          );
         },
         onCancel: () => this.api.ui.dialog.clear(),
       }),
@@ -1532,15 +1552,31 @@ export class TuiManager {
               "Inter-agent doctor",
               "optional context",
               async (value) => this.doctor(value),
+              { doctor: true },
             ),
         ),
       ],
     });
   }
 
-  private commandError(error: unknown): string {
+  private commandError(
+    error: unknown,
+    options: { doctor?: boolean } = {},
+  ): string {
     const message = errorText(error);
-    this.toast(message, "error");
+    let display = message;
+    if (options.doctor) {
+      display = appendFailureGuidance(
+        message,
+        "Check this extension's README.md for package-loading and doctor setup guidance.",
+      );
+    } else if (!isNonOperationalCommandFailure(error)) {
+      display = appendFailureGuidance(
+        message,
+        "Run /inter-agent-doctor for bounded diagnostics and check this extension's README.md for setup guidance.",
+      );
+    }
+    this.toast(display, "error");
     return message;
   }
 

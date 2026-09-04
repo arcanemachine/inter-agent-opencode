@@ -43,6 +43,15 @@ test("package metadata exposes independent OpenCode targets", async () => {
   });
 });
 
+test("README documents doctor recovery and healthy report outcomes", async () => {
+  const readme = await readFile(resolve(projectRoot, "README.md"), "utf8");
+  assert.match(readme, /\/inter-agent-doctor/);
+  assert.match(readme, /primary setup and troubleshooting path/);
+  assert.match(readme, /bounded and read-only/);
+  assert.match(readme, /never auto-repairs/);
+  assert.match(readme, /No issues found in the checks performed\./);
+});
+
 test("compiled targets have mutually exclusive default exports", async () => {
   const tuiModule = (await import(
     pathToFileURL(resolve(distPath, "tui.js")).href

@@ -3,6 +3,11 @@
 ## Unreleased
 
 - Add the bounded, read-only `/inter-agent-doctor` palette command with optional escaped context and host/Core diagnostics.
+- Add text-only recovery guidance after operational inter-agent command failures:
+  run `/inter-agent-doctor` and check `README.md`; doctor failures point to
+  package-loading guidance without recursive invocation.
+- Require healthy doctor runs to say explicitly that no issues were found in the
+  checks performed instead of inventing a failure or repair step.
 
 ## 0.2.3
 
