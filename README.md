@@ -17,7 +17,7 @@ The Core server remains a separate process. This extension never starts, stops, 
 
 You need:
 
-- OpenCode `>=1.18.15 <1.19.0`;
+- OpenCode `>=1.18.15 <2.0.0`;
 - a separately managed [`inter-agent-core`](https://github.com/arcanemachine/inter-agent-core) server already running;
 - a loopback Core endpoint and shared secret;
 - permission to add plugins to the OpenCode project.
@@ -26,7 +26,7 @@ The default endpoint is `127.0.0.1:16837` over plaintext WebSockets. Use loopbac
 
 ## Install
 
-Install the published npm package (current release `0.2.3`) with OpenCode's plugin installer:
+Install the published npm package (current release `0.2.4`) with OpenCode's plugin installer:
 
 ```sh
 opencode plugin @arcanemachine/inter-agent-opencode

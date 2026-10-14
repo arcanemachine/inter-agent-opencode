@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@arcanemachine/inter-agent-opencode",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "OpenCode extension for connecting agent sessions to the inter-agent message bus.",
   "license": "MIT",
   "type": "module",
   "engines": {
-    "opencode": ">=1.18.15 <1.19.0"
+    "opencode": ">=1.18.15 <2.0.0"
   },
   "exports": {
     "./tui": "./dist/tui.js",
@@ -35,6 +35,6 @@
     "typescript": "5.9.2"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "1.18.15"
+    "@opencode-ai/plugin": "^1.19.0"
   }
 }

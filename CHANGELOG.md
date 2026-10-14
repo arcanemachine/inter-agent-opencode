@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.4
+
+- Support OpenCode `1.19.x`: widen the host engine range to `>=1.18.15 <2.0.0`
+  and update `@opencode-ai/plugin` to `^1.19.0`.
 - Add the bounded, read-only `/inter-agent-doctor` palette command with optional escaped context and host/Core diagnostics.
 - Add text-only recovery guidance after operational inter-agent command failures:
   run `/inter-agent-doctor` and check `README.md`; doctor failures point to

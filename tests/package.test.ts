@@ -26,16 +26,16 @@ test("package metadata exposes independent OpenCode targets", async () => {
   const manifest = await readManifest();
 
   assert.equal(manifest.name, "@arcanemachine/inter-agent-opencode");
-  assert.equal(manifest.version, "0.2.3");
+  assert.equal(manifest.version, "0.2.4");
   assert.equal(manifest.type, "module");
-  assert.equal(manifest.engines.opencode, ">=1.18.15 <1.19.0");
+  assert.equal(manifest.engines.opencode, ">=1.18.15 <2.0.0");
   assert.deepEqual(manifest.files.slice(0, 2), [
     "dist/**/*.js",
     "dist/**/*.d.ts",
   ]);
   assert.equal(manifest.files.includes("dist"), false);
   assert.deepEqual(manifest.dependencies, {
-    "@opencode-ai/plugin": "1.18.15",
+    "@opencode-ai/plugin": "^1.19.0",
   });
   assert.deepEqual(manifest.exports, {
     "./tui": "./dist/tui.js",
